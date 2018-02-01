@@ -1046,7 +1046,7 @@ extern int task_cgroup_cpuset_create(stepd_step_rec_t *job)
 	int rc;
 	int fstatus = SLURM_ERROR;
 	xcgroup_t cpuset_cg;
-	uint32_t jobid = job->jobid;
+	uint32_t jobid;
 	uint32_t stepid = job->stepid;
 	uid_t uid = job->uid;
 	uid_t gid = job->gid;
@@ -1056,10 +1056,8 @@ extern int task_cgroup_cpuset_create(stepd_step_rec_t *job)
 	char cpuset_meta[PATH_MAX];
 	char *cpus = NULL;
 	size_t cpus_size;
-
-	char* slurm_cgpath;
+	char *slurm_cgpath;
 	xcgroup_t slurm_cg;
-
 #ifdef HAVE_NATIVE_CRAY
 	char expected_usage[32];
 #endif
@@ -1110,11 +1108,15 @@ again:
 	xfree(slurm_cgpath);
 
 	/* build job cgroup relative path if no set (should not be) */
+	if (job->pack_jobid && (job->pack_jobid != NO_VAL))
+		jobid = job->pack_jobid;
+	else
+		jobid = job->jobid;
 	if (*job_cgroup_path == '\0') {
 		if (snprintf(job_cgroup_path,PATH_MAX,"%s/job_%u",
-			     user_cgroup_path,jobid) >= PATH_MAX) {
+			     user_cgroup_path, jobid) >= PATH_MAX) {
 			error("task/cgroup: unable to build job %u cpuset "
-			      "cg relative path : %m",jobid);
+			      "cg relative path : %m", jobid);
 			return SLURM_ERROR;
 		}
 	}

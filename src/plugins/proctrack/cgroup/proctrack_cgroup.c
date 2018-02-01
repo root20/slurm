@@ -126,9 +126,13 @@ int _slurm_cgroup_init(void)
 
 int _slurm_cgroup_create(stepd_step_rec_t *job, uint64_t id, uid_t uid, gid_t gid)
 {
-	/* we do it here as we do not have access to the conf structure */
-	/* in libslurm (src/common/xcgroup.c) */
+	/*
+	 * we do it here as we do not have access to the conf structure
+	 * in libslurm (src/common/xcgroup.c)
+	 */
 	char *pre = (char *)xstrdup(slurm_cgroup_conf.cgroup_prepend);
+	uint32_t jobid;
+
 #ifdef MULTIPLE_SLURMD
 	if ( conf->node_name != NULL )
 		xstrsubstitute(pre,"%n", conf->node_name);
@@ -173,11 +177,15 @@ int _slurm_cgroup_create(stepd_step_rec_t *job, uint64_t id, uid_t uid, gid_t gi
 	xfree(pre);
 
 	/* build job cgroup relative path if no set (should not be) */
+	if (job->pack_jobid && (job->pack_jobid != NO_VAL))
+		jobid = job->pack_jobid;
+	else
+		jobid = job->jobid;
 	if (*job_cgroup_path == '\0') {
 		if (snprintf(job_cgroup_path, PATH_MAX, "%s/job_%u",
-			     user_cgroup_path, job->jobid) >= PATH_MAX) {
+			     user_cgroup_path, jobid) >= PATH_MAX) {
 			error("unable to build job %u cgroup relative path : %m",
-			      job->jobid);
+			      jobid);
 			goto bail;
 		}
 	}
@@ -199,7 +207,7 @@ int _slurm_cgroup_create(stepd_step_rec_t *job, uint64_t id, uid_t uid, gid_t gi
 		if (cc >= PATH_MAX) {
 			error("proctrack/cgroup unable to build job step %u.%u "
 			      "freezer cg relative path: %m",
-			      job->jobid, job->stepid);
+			      jobid, job->stepid);
 			goto bail;
 		}
 	}
