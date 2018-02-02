@@ -100,7 +100,7 @@ typedef struct {
 	uint64_t apid;
 	uint32_t exit_code;
 	bool is_step;	/* true if step, false if job */
-	uint32_t jobid;
+	uint32_t jobid;	/* Pack jobid, otherwise jobid */
 	char *nodelist;
 	uint32_t user_id;
 } nhc_info_t;
@@ -1045,7 +1045,10 @@ static void *_job_fini(void *args)
 
 	memset(&nhc_info, 0, sizeof(nhc_info_t));
 	lock_slurmctld(job_read_lock);
-	nhc_info.jobid = job_ptr->job_id;
+	if (job_ptr->pack_job_id)
+		nhc_info.jobid = job_ptr->pack_job_id;
+	else
+		nhc_info.jobid = job_ptr->job_id;
 	nhc_info.nodelist = xstrdup(job_ptr->nodes);
 	nhc_info.exit_code = 1; /* hard code to 1 to always run */
 	nhc_info.user_id = job_ptr->user_id;
@@ -1086,6 +1089,7 @@ static void *_step_fini(void *args)
 	struct step_record *step_ptr = (struct step_record *)args;
 	select_jobinfo_t *jobinfo = NULL;
 	nhc_info_t nhc_info;
+	uint32_t jobid;
 
 	/* Locks: Write job, write node */
 	slurmctld_lock_t job_write_lock = {
@@ -1106,7 +1110,10 @@ static void *_step_fini(void *args)
 
 	lock_slurmctld(job_read_lock);
 	memset(&nhc_info, 0, sizeof(nhc_info_t));
-	nhc_info.jobid = step_ptr->job_ptr->job_id;
+	if (step_ptr->job_ptr->pack_job_id)
+		nhc_info.jobid = step_ptr->job_ptr->pack_job_id;
+	else
+		nhc_info.jobid = step_ptr->job_ptr->job_id;
 	jobinfo = step_ptr->select_jobinfo->data;
 	if (IS_CLEANING_COMPLETE(jobinfo)) {
 		debug("%s: NHC previously run for %pS",
@@ -1153,7 +1160,11 @@ static void *_step_fini(void *args)
 	/* NHC has completed, release the step's resources */
 	_throttle_start();
 	lock_slurmctld(job_write_lock);
-	if (step_ptr->job_ptr->job_id != nhc_info.jobid) {
+	if (step_ptr->job_ptr->pack_job_id)
+		jobid = step_ptr->job_ptr->pack_job_id;
+	else
+		jobid = step_ptr->job_ptr->job_id;
+	if (jobid != nhc_info.jobid) {
 		error("%s: For some reason we don't have a valid job_ptr for "
 		      "job %u APID %"PRIu64".  This should never happen.",
 		      __func__, nhc_info.jobid, nhc_info.apid);
