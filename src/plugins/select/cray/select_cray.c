@@ -593,16 +593,21 @@ static void _initialize_event(alpsc_ev_app_t *event,
 	hostlist_iterator_t hlit;
 	char *node;
 	int rv;
+	uint32_t jobid;
 
 	DEF_TIMERS;
 
 	START_TIMER;
 
-	event->apid = SLURM_ID_HASH(job_ptr->job_id, step_ptr->step_id);
+	if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
+		jobid = job_ptr->pack_jobid;
+	else
+		jobid = job_ptr->jobid;
+
+	event->apid = SLURM_ID_HASH(jobid, step_ptr->step_id);
 	event->uid = job_ptr->user_id;
 	event->app_name = xstrdup(step_ptr->name);
-	event->batch_id = xmalloc(20);	// More than enough to hold max uint32
-	snprintf(event->batch_id, 20, "%"PRIu32, job_ptr->job_id);
+	event->batch_id = xstrdup_printf("%u", job_ptr->job_id);
 	event->state = state;
 	event->nodes = NULL;
 	event->num_nodes = 0;
@@ -718,6 +723,8 @@ static void _update_app(struct step_record *step_ptr,
 	int32_t i;
 	alpsc_ev_app_t app;
 	int found;
+	uint32_t jobid;
+
 	DEF_TIMERS;
 
 	START_TIMER;
@@ -758,7 +765,13 @@ static void _update_app(struct step_record *step_ptr,
 	case ALPSC_EV_END:
 		// Search for the app matching this apid
 		found = 0;
-		apid = SLURM_ID_HASH(job_ptr->job_id, step_ptr->step_id);
+
+		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
+			jobid = job_ptr->pack_jobid;
+		else
+			jobid = job_ptr->jobid;
+
+		apid = SLURM_ID_HASH(jobid, step_ptr->step_id);
 		for (i = 0; i < app_list_size; i++) {
 			if (app_list[i].apid == apid) {
 				found = 1;
@@ -787,7 +800,12 @@ static void _update_app(struct step_record *step_ptr,
 	case ALPSC_EV_SUSPEND:
 	case ALPSC_EV_RESUME:
 		// Search for the app matching this apid
-		apid = SLURM_ID_HASH(job_ptr->job_id, step_ptr->step_id);
+		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
+			jobid = job_ptr->pack_jobid;
+		else
+			jobid = job_ptr->jobid;
+
+		apid = SLURM_ID_HASH(jobid, step_ptr->step_id);
 		for (i = 0; i < app_list_size; i++) {
 			if (app_list[i].apid == apid) {
 				// Found it, update the state
@@ -1123,10 +1141,17 @@ static void *_step_fini(void *args)
 		debug2("%s: %pS complete, no NHC", __func__, step_ptr);
 		unlock_slurmctld(job_read_lock);
 	} else {
+		uint32_t jobid;
+		struct job_record *job_ptr = step_ptr->job_ptr;
 		/* Run application NHC */
+
+		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
+			jobid = job_ptr->pack_jobid;
+		else
+			jobid = job_ptr->jobid;
+
 		nhc_info.is_step = true;
-		nhc_info.apid = SLURM_ID_HASH(step_ptr->job_ptr->job_id,
-					      step_ptr->step_id);
+		nhc_info.apid = SLURM_ID_HASH(jobid, step_ptr->step_id);
 
 		/*
 		 * If we are killing the step it is usually because we
