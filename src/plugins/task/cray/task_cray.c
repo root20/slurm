@@ -745,6 +745,8 @@ static int _check_status_file(stepd_step_rec_t *job,
  */
 static int _get_numa_nodes(char *path, int *cnt, int32_t **numa_array)
 {
+	bool cpuset_prefix_set = true;
+	char *cpuset_prefix = "cpuset.";
 	struct bitmask *bm;
 	int i, index, rc = 0;
 	int lsz;
