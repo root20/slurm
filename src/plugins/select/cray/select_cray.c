@@ -599,8 +599,8 @@ static void _initialize_event(alpsc_ev_app_t *event,
 
 	START_TIMER;
 
-	if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
-		jobid = job_ptr->pack_jobid;
+	if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
+		jobid = job_ptr->pack_job_id;
 	else
 		jobid = job_ptr->jobid;
 
@@ -766,8 +766,8 @@ static void _update_app(struct step_record *step_ptr,
 		// Search for the app matching this apid
 		found = 0;
 
-		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
-			jobid = job_ptr->pack_jobid;
+		if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
+			jobid = job_ptr->pack_job_id;
 		else
 			jobid = job_ptr->jobid;
 
@@ -800,8 +800,8 @@ static void _update_app(struct step_record *step_ptr,
 	case ALPSC_EV_SUSPEND:
 	case ALPSC_EV_RESUME:
 		// Search for the app matching this apid
-		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
-			jobid = job_ptr->pack_jobid;
+		if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
+			jobid = job_ptr->pack_job_id;
 		else
 			jobid = job_ptr->jobid;
 
@@ -1145,10 +1145,10 @@ static void *_step_fini(void *args)
 		struct job_record *job_ptr = step_ptr->job_ptr;
 		/* Run application NHC */
 
-		if (job_ptr->pack_jobid && (job_ptr->pack_jobid != NO_VAL))
-			jobid = job_ptr->pack_jobid;
+		if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
+			jobid = job_ptr->pack_job_id;
 		else
-			jobid = job_ptr->jobid;
+			jobid = job_ptr->job_id;
 
 		nhc_info.is_step = true;
 		nhc_info.apid = SLURM_ID_HASH(jobid, step_ptr->step_id);
