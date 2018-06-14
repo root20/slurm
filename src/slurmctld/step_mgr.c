@@ -2667,6 +2667,7 @@ step_create(job_step_create_request_msg_t *step_specs,
 	/* a batch script does not need switch info */
 	if (!batch_step) {
 		char *mpi_params;
+		uint32_t jobid;
 
 		step_ptr->step_layout =
 			step_layout_create(step_ptr,
@@ -2706,9 +2707,18 @@ step_create(job_step_create_request_msg_t *step_specs,
 				return i;
 			}
 		}
+#if !defined(HAVE_NATIVE_CRAY) && !defined(HAVE_CRAY_NETWORK)
+		if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
+			jobid = job_ptr->pack_job_id;
+		else
+			jobid = job_ptr->job_id;
+#else
+		jobid = job_ptr->job_id;
+#endif
+
 
 		if (switch_g_alloc_jobinfo(&step_ptr->switch_job,
-					   step_ptr->job_ptr->job_id,
+					   jobid,
 					   step_ptr->step_id) < 0)
 			fatal ("step_create: switch_g_alloc_jobinfo error");
 
