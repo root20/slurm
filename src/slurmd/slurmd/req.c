@@ -2216,6 +2216,7 @@ static void _rpc_prolog(slurm_msg_t *msg)
 	slurm_mutex_lock(&prolog_mutex);
 	first_job_run = !slurm_cred_jobid_cached(conf->vctx, req->job_id);
 	if (first_job_run) {
+		uint32_t jobid;
 		if (slurmctld_conf.prolog_flags & PROLOG_FLAG_CONTAIN)
 			_make_prolog_mem_container(msg);
 
@@ -2437,10 +2438,13 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-		// Attach to the cncu container
-		if (job->pack_jobid && (job->pack_jobid != NO_VAL))
-			jobid = req->pack_jobid;
-		else
+	/*
+	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
+	 * instead of doing it here.
+	 */
+		/* if (job->pack_jobid && (job->pack_jobid != NO_VAL)) */
+		/* 	jobid = req->pack_jobid; */
+		/* else */
 			jobid = req->job_id;
 #else
 		jobid = req->job_id;
