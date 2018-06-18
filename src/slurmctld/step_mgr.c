@@ -2707,7 +2707,7 @@ step_create(job_step_create_request_msg_t *step_specs,
 				return i;
 			}
 		}
-#if !defined(HAVE_NATIVE_CRAY) && !defined(HAVE_CRAY_NETWORK)
+#ifdef HAVE_NATIVE_CRAY
 		if (job_ptr->pack_job_id && (job_ptr->pack_job_id != NO_VAL))
 			jobid = job_ptr->pack_job_id;
 		else
