@@ -430,8 +430,8 @@ extern int switch_p_job_init(stepd_step_rec_t *job)
 	uint64_t cont_id = job->cont_id;
 	alpsc_peInfo_t alpsc_pe_info = {-1, -1, -1, -1, NULL, NULL, NULL};
 	int cmd_index = 0;
-	uint32_t jobid;
 #ifdef HAVE_NATIVE_CRAY
+	uint32_t jobid;
 	uint64_t gpu_cnt = 0;
 	int control_nid = 0, num_branches = 0;
 	struct sockaddr_in control_soc;
@@ -449,6 +449,7 @@ extern int switch_p_job_init(stepd_step_rec_t *job)
 #ifdef HAVE_CRAY_NETWORK
 	/* No PAGG job containers; uid used instead to configure network */
 	cont_id = (uint64_t)job->uid;
+
 #endif
 
 	if (!sw_job || (sw_job->magic == CRAY_NULL_JOBINFO_MAGIC)) {
@@ -465,9 +466,6 @@ extern int switch_p_job_init(stepd_step_rec_t *job)
 		jobid = job->pack_jobid;
 	else
 		jobid = job->jobid;
-#else
-	jobid = req->jobid;
-#endif
 
 	rc = alpsc_attach_cncu_container(&err_msg, jobid, job->cont_id);
 	ALPSC_CN_DEBUG("alpsc_attach_cncu_container");
