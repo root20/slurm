@@ -1485,9 +1485,9 @@ _rpc_launch_tasks(slurm_msg_t *msg)
 		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
 			jobid = req->pack_jobid;
 		else
-			jobid = req->jobid;
+			jobid = req->job_id;
 #else
-		jobid = req->jobid;
+		jobid = req->job_id;
 #endif
 		if (container_g_create(jobid))
 			error("container_g_create(%u): %m", req->job_id);
@@ -1722,12 +1722,16 @@ _prolog_error(batch_job_launch_msg_t *req, int rc)
 	uint32_t jobid;
 
 #ifdef HAVE_NATIVE_CRAY
-	if (req->pack_jobid && (req->pack_jobid != NO_VAL))
-		jobid = req->pack_jobid;
-	else
-		jobid = req->jobid;
+	/*
+	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
+	 * instead of doing it here.
+	 */
+	/* if (req->pack_jobid && (req->pack_jobid != NO_VAL)) */
+	/* 	jobid = req->pack_jobid; */
+	/* else */
+		jobid = req->job_id;
 #else
-	jobid = req->jobid;
+	jobid = req->job_id;
 #endif
 
 	path_name = fname_create2(req);
@@ -2237,12 +2241,16 @@ static void _rpc_prolog(slurm_msg_t *msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
-			jobid = req->pack_jobid;
-		else
-			jobid = req->jobid;
+	/*
+	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
+	 * instead of doing it here.
+	 */
+		/* if (req->pack_jobid && (req->pack_jobid != NO_VAL)) */
+		/* 	jobid = req->pack_jobid; */
+		/* else */
+			jobid = req->job_id;
 #else
-		jobid = req->jobid;
+		jobid = req->job_id;
 #endif
 
 		if ((rc = container_g_create(jobid)))
@@ -2431,11 +2439,11 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 #ifdef HAVE_NATIVE_CRAY
 		// Attach to the cncu container
 		if (job->pack_jobid && (job->pack_jobid != NO_VAL))
-			jobid = job->pack_jobid;
+			jobid = req->pack_jobid;
 		else
-			jobid = job->jobid;
+			jobid = req->job_id;
 #else
-		jobid = req->jobid;
+		jobid = req->job_id;
 #endif
 
 		if ((rc = container_g_create(jobid)))
@@ -5109,6 +5117,7 @@ _rpc_abort_job(slurm_msg_t *msg)
 	uid_t           uid    = g_slurm_auth_get_uid(msg->auth_cred,
 						      conf->auth_info);
 	job_env_t       job_env;
+	uint32_t        jobid;
 
 	debug("_rpc_abort_job, uid = %d", uid);
 	/*
@@ -5181,7 +5190,20 @@ _rpc_abort_job(slurm_msg_t *msg)
 
 	_run_epilog(&job_env);
 
-	if (container_g_delete(req->job_id))
+#ifdef HAVE_NATIVE_CRAY
+	/*
+	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
+	 * instead of doing it here.
+	 */
+	/* if (req->pack_jobid && (req->pack_jobid != NO_VAL)) */
+	/* 	jobid = req->pack_jobid; */
+	/* else */
+		jobid = req->job_id;
+#else
+	jobid = req->job_id;
+#endif
+
+	if (container_g_delete(jobid))
 		error("container_g_delete(%u): %m", req->job_id);
 	_launch_complete_rm(req->job_id);
 
@@ -5344,6 +5366,11 @@ _rpc_complete_batch(slurm_msg_t *msg)
 	}
 
 	slurm_send_rc_msg(msg, SLURM_SUCCESS);
+
+	/*
+	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
+	 * instead of doing it here.
+	 */
 
 	if (running_serial) {
 		_rpc_terminate_batch_job(
