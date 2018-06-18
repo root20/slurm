@@ -1475,12 +1475,21 @@ _rpc_launch_tasks(slurm_msg_t *msg)
 	if (first_job_run) {
 		int rc;
 		job_env_t job_env;
+		uint32_t jobid;
 
 		slurm_cred_insert_jobid(conf->vctx, req->job_id);
 		_add_job_running_prolog(req->job_id);
 		slurm_mutex_unlock(&prolog_mutex);
 
-		if (container_g_create(req->job_id))
+#ifdef HAVE_NATIVE_CRAY
+		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
+			jobid = req->pack_jobid;
+		else
+			jobid = req->jobid;
+#else
+		jobid = req->jobid;
+#endif
+		if (container_g_create(jobid))
 			error("container_g_create(%u): %m", req->job_id);
 
 		memset(&job_env, 0, sizeof(job_env_t));
@@ -1710,10 +1719,20 @@ _prolog_error(batch_job_launch_msg_t *req, int rc)
 	char *err_name = NULL, *path_name = NULL;
 	int fd;
 	int flags = (O_CREAT|O_APPEND|O_WRONLY);
+	uint32_t jobid;
+
+#ifdef HAVE_NATIVE_CRAY
+	if (req->pack_jobid && (req->pack_jobid != NO_VAL))
+		jobid = req->pack_jobid;
+	else
+		jobid = req->jobid;
+#else
+	jobid = req->jobid;
+#endif
 
 	path_name = fname_create2(req);
 	if ((fd = _open_as_other(path_name, flags, 0644,
-				 req->job_id, req->uid, req->gid,
+				 jobid, req->uid, req->gid,
 				 req->ngids, req->gids)) == -1) {
 		error("Unable to open %s: Permission denied", path_name);
 		xfree(path_name);
@@ -2216,7 +2235,17 @@ static void _rpc_prolog(slurm_msg_t *msg)
 		job_env.resv_id = select_g_select_jobinfo_xstrdup(
 			req->select_jobinfo, SELECT_PRINT_RESV_ID);
 #endif
-		if ((rc = container_g_create(req->job_id)))
+
+#ifdef HAVE_NATIVE_CRAY
+		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
+			jobid = req->pack_jobid;
+		else
+			jobid = req->jobid;
+#else
+		jobid = req->jobid;
+#endif
+
+		if ((rc = container_g_create(jobid)))
 			error("container_g_create(%u): %m", req->job_id);
 		else
 			rc = _run_prolog(&job_env, req->cred, false);
@@ -2377,6 +2406,7 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 	 */
 	if (first_job_run) {
 		job_env_t job_env;
+		uint32_t jobid;
 		slurm_cred_insert_jobid(conf->vctx, req->job_id);
 		_add_job_running_prolog(req->job_id);
 		slurm_mutex_unlock(&prolog_mutex);
@@ -2397,7 +2427,18 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 		job_env.resv_id = select_g_select_jobinfo_xstrdup(
 			req->select_jobinfo, SELECT_PRINT_RESV_ID);
 #endif
-		if ((rc = container_g_create(req->job_id)))
+
+#ifdef HAVE_NATIVE_CRAY
+		// Attach to the cncu container
+		if (job->pack_jobid && (job->pack_jobid != NO_VAL))
+			jobid = job->pack_jobid;
+		else
+			jobid = job->jobid;
+#else
+		jobid = req->jobid;
+#endif
+
+		if ((rc = container_g_create(jobid)))
 			error("container_g_create(%u): %m", req->job_id);
 		else
 			rc = _run_prolog(&job_env, req->cred, true);
@@ -4161,6 +4202,7 @@ static int _rpc_file_bcast(slurm_msg_t *msg)
 	if (!cred_arg)
 		return ESLURMD_INVALID_JOB_CREDENTIAL;
 
+	/* FIXME: This needs to get the parent of a het job on a CRAY */
 	key.job_id = cred_arg->job_id;
 
 #if 0

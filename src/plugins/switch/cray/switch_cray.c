@@ -430,12 +430,12 @@ extern int switch_p_job_init(stepd_step_rec_t *job)
 	uint64_t cont_id = job->cont_id;
 	alpsc_peInfo_t alpsc_pe_info = {-1, -1, -1, -1, NULL, NULL, NULL};
 	int cmd_index = 0;
+	uint32_t jobid;
 #ifdef HAVE_NATIVE_CRAY
 	uint64_t gpu_cnt = 0;
 	int control_nid = 0, num_branches = 0;
 	struct sockaddr_in control_soc;
 	alpsc_branchInfo_t alpsc_branch_info;
-	uint32_t jobid;
 #endif
 
 #if defined(HAVE_NATIVE_CRAY_GA) && !defined(HAVE_CRAY_NETWORK)
@@ -465,6 +465,10 @@ extern int switch_p_job_init(stepd_step_rec_t *job)
 		jobid = job->pack_jobid;
 	else
 		jobid = job->jobid;
+#else
+	jobid = req->jobid;
+#endif
+
 	rc = alpsc_attach_cncu_container(&err_msg, jobid, job->cont_id);
 	ALPSC_CN_DEBUG("alpsc_attach_cncu_container");
 	if (rc != 1) {
