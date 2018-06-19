@@ -2242,7 +2242,7 @@ static void _rpc_prolog(slurm_msg_t *msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-		if (req->pack_jobid && (req->pack_job_id != NO_VAL))
+		if (req->pack_job_id && (req->pack_job_id != NO_VAL))
 			jobid = req->pack_job_id;
 		else
 			jobid = req->job_id;
