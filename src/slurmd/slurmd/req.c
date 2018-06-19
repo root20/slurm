@@ -5366,13 +5366,12 @@ _rpc_complete_batch(slurm_msg_t *msg)
 	slurm_send_rc_msg(msg, SLURM_SUCCESS);
 
 	if (running_serial) {
-		uint32_t pack_jobid = 0;
-#ifdef HAVE_NATIVE_CRAY
-		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
-			pack_jobid = req->pack_jobid;
-#endif
+		/*
+		 * You can't run het jobs with serial so always send 0 for the
+		 * pack_jobid.
+		 */
 		_rpc_terminate_batch_job(
-			req->job_id, pack_jobid, req->user_id, req->node_name);
+			req->job_id, 0, req->user_id, req->node_name);
 		msg_type = REQUEST_COMPLETE_BATCH_JOB;
 	} else
 		msg_type = msg->msg_type;
