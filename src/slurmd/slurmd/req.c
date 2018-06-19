@@ -6012,12 +6012,6 @@ _run_spank_job_script (const char *mode, char **env, uint32_t job_id, uid_t uid)
 		   to the container in the parent of the fork.
 		*/
 
-		/*
-		 * NOTE: At the time of this writing container_g_add_pid() did
-		 * not use the job_id for anything other debug printing.  So
-		 * there is no reason to send in the pack_jobid instead of the
-		 * regular job_id
-		 */
 		if (container_g_add_pid(job_id, getpid(), getuid())
 		    != SLURM_SUCCESS)
 			error("container_g_add_pid(%u): %m", job_id);
@@ -6149,6 +6143,7 @@ _run_prolog(job_env_t *job_env, slurm_cred_t *cred, bool remove_running)
 	bool prolog_fini = false;
 	bool script_lock = false;
 	char **my_env;
+	uint32_t jobid;
 
 	my_env = _build_env(job_env);
 	setenvf(&my_env, "SLURM_STEP_ID", "%u", job_env->step_id);
@@ -6186,11 +6181,20 @@ _run_prolog(job_env_t *job_env, slurm_cred_t *cred, bool remove_running)
 
 	START_TIMER;
 
+#ifdef HAVE_NATIVE_CRAY
+	if (job_env->pack_jobid && (job_env->pack_jobid != NO_VAL))
+		jobid = job_env->pack_jobid;
+	else
+		jobid = job_env->jobid;
+#else
+	jobid = job_env->jobid;
+#endif
+
 	if (timeout == NO_VAL16) {
-		rc = _run_job_script("prolog", my_prolog, job_env->jobid,
+		rc = _run_job_script("prolog", my_prolog, jobid,
 				     -1, my_env, job_env->uid);
 	} else {
-		rc = _run_job_script("prolog", my_prolog, job_env->jobid,
+		rc = _run_job_script("prolog", my_prolog, jobid,
 				     timeout, my_env, job_env->uid);
 	}
 	END_TIMER;
@@ -6231,6 +6235,7 @@ _run_epilog(job_env_t *job_env)
 	char *my_epilog;
 	char **my_env = _build_env(job_env);
 	bool script_lock = false;
+	uint32_t jobid;
 
 	if (msg_timeout == 0)
 		msg_timeout = slurm_get_msg_timeout();
@@ -6249,11 +6254,20 @@ _run_epilog(job_env_t *job_env)
 		script_lock = true;
 	}
 
+#ifdef HAVE_NATIVE_CRAY
+	if (job_env->pack_jobid && (job_env->pack_jobid != NO_VAL))
+		jobid = job_env->pack_jobid;
+	else
+		jobid = job_env->jobid;
+#else
+	jobid = job_env->jobid;
+#endif
+
 	if (timeout == NO_VAL16)
-		error_code = _run_job_script("epilog", my_epilog, job_env->jobid,
+		error_code = _run_job_script("epilog", my_epilog, jobid,
 					     -1, my_env, job_env->uid);
 	else
-		error_code = _run_job_script("epilog", my_epilog, job_env->jobid,
+		error_code = _run_job_script("epilog", my_epilog, jobid,
 					     timeout, my_env, job_env->uid);
 
 	xfree(my_epilog);
