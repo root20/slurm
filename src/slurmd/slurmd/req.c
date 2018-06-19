@@ -1722,13 +1722,9 @@ _prolog_error(batch_job_launch_msg_t *req, int rc)
 	uint32_t jobid;
 
 #ifdef HAVE_NATIVE_CRAY
-	/*
-	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
-	 * instead of doing it here.
-	 */
-	/* if (req->pack_jobid && (req->pack_jobid != NO_VAL)) */
-	/* 	jobid = req->pack_jobid; */
-	/* else */
+	if (req->pack_jobid && (req->pack_jobid != NO_VAL))
+		jobid = req->pack_jobid;
+	else
 		jobid = req->job_id;
 #else
 	jobid = req->job_id;
@@ -2434,13 +2430,9 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-	/*
-	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
-	 * instead of doing it here.
-	 */
-		/* if (job->pack_jobid && (job->pack_jobid != NO_VAL)) */
-		/* 	jobid = req->pack_jobid; */
-		/* else */
+		if (job->pack_jobid && (job->pack_jobid != NO_VAL))
+			jobid = req->pack_jobid;
+		else
 			jobid = req->job_id;
 #else
 		jobid = req->job_id;
@@ -6010,6 +6002,13 @@ _run_spank_job_script (const char *mode, char **env, uint32_t job_id, uid_t uid)
 		   detacts itself from a child before we add the pid
 		   to the container in the parent of the fork.
 		*/
+
+		/*
+		 * NOTE: At the time of this writing container_g_add_pid() did
+		 * not use the job_id for anything other debug printing.  So
+		 * there is no reason to send in the pack_jobid instead of the
+		 * regular job_id
+		 */
 		if (container_g_add_pid(job_id, getpid(), getuid())
 		    != SLURM_SUCCESS)
 			error("container_g_add_pid(%u): %m", job_id);
