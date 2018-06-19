@@ -2242,13 +2242,9 @@ static void _rpc_prolog(slurm_msg_t *msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-	/*
-	 * FIXME: This pack_jobid isn't sent.  Perhaps handle it in the caller
-	 * instead of doing it here.
-	 */
-		/* if (req->pack_jobid && (req->pack_jobid != NO_VAL)) */
-		/* 	jobid = req->pack_jobid; */
-		/* else */
+		if (req->pack_jobid && (req->pack_job_id != NO_VAL))
+			jobid = req->pack_job_id;
+		else
 			jobid = req->job_id;
 #else
 		jobid = req->job_id;
