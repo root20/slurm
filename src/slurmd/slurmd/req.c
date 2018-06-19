@@ -2430,7 +2430,7 @@ _rpc_batch_job(slurm_msg_t *msg, bool new_msg)
 #endif
 
 #ifdef HAVE_NATIVE_CRAY
-		if (job->pack_jobid && (job->pack_jobid != NO_VAL))
+		if (req->pack_jobid && (req->pack_jobid != NO_VAL))
 			jobid = req->pack_jobid;
 		else
 			jobid = req->job_id;
