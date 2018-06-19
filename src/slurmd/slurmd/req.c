@@ -4200,6 +4200,7 @@ static int _rpc_file_bcast(slurm_msg_t *msg)
 	file_bcast_info_t *file_info;
 	file_bcast_msg_t *req = msg->data;
 	file_bcast_info_t key;
+	uint32_t jobid;
 
 	key.uid = g_slurm_auth_get_uid(msg->auth_cred, conf->auth_info);
 	key.gid = g_slurm_auth_get_gid(msg->auth_cred, conf->auth_info);
@@ -4210,8 +4211,16 @@ static int _rpc_file_bcast(slurm_msg_t *msg)
 	if (!cred_arg)
 		return ESLURMD_INVALID_JOB_CREDENTIAL;
 
-	/* FIXME: This needs to get the parent of a het job on a CRAY */
-	key.job_id = cred_arg->job_id;
+#ifdef HAVE_NATIVE_CRAY
+	if (cred_arg->pack_jobid && (cred_arg->pack_jobid != NO_VAL))
+		jobid = cred_arg->pack_jobid;
+	else
+		jobid = cred_arg->job_id;
+#else
+	jobid = cred_arg->job_id;
+#endif
+
+	key.job_id = jobid;
 
 #if 0
 	info("last_block=%u force=%u modes=%o",
