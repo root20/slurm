@@ -1,8 +1,9 @@
 /*****************************************************************************\
- *  acct_gather_energy_ipmi_config.h - declarations for reading ipmi.conf
+ *  acct_gather_energy_xcc_config.h - functions for reading acct_gather.conf
  *****************************************************************************
- *  Copyright (C) 2012
- *  Written by Bull- Thomas Cadeau
+ *  Copyright (C) 2018
+ *  Written by SchedMD - Felip Moll
+ *  Based on IPMI plugin by Thomas Cadeau @ Bull
  *
  *  This file is part of Slurm, a resource management program.
  *  For details, see <https://slurm.schedmd.com/>.
@@ -37,20 +38,15 @@
 #ifndef _IPMI_READ_CONFIG_H
 #define _IPMI_READ_CONFIG_H
 
-#include <ipmi_monitoring.h>
-
 #define DEFAULT_IPMI_FREQ 30
-#define DEFAULT_IPMI_USER "foousername"
-#define DEFAULT_IPMI_VARIABLE IPMI_MONITORING_SENSOR_UNITS_WATTS
+#define DEFAULT_IPMI_USER "USERID"
+#define DEFAULT_IPMI_PASS "PASSW0RD"
+#define DEFAULT_IPMI_TIMEOUT 10
 
 typedef struct slurm_ipmi_conf {
 	/* Adjust/approach the consumption
 	 * in function of time between ipmi update and read call */
 	bool adjustment;
-	/* Assume the BMC is the sensor owner no matter what.  This option
-	 * works around motherboards that incorrectly indicate a non-BMC
-	 * sensor owner (e.g. usually bridging is required).*/
-	bool assume_bmc_owner;
 	/* authentication type to use
 	 *   IPMI_MONITORING_AUTHENTICATION_TYPE_NONE                  = 0x00,
 	 *   IPMI_MONITORING_AUTHENTICATION_TYPE_STRAIGHT_PASSWORD_KEY = 0x01,
@@ -58,8 +54,7 @@ typedef struct slurm_ipmi_conf {
 	 *   IPMI_MONITORING_AUTHENTICATION_TYPE_MD5                   = 0x03,
 	 * Pass < 0 for default of IPMI_MONITORING_AUTHENTICATION_TYPE_MD5*/
 	uint32_t authentication_type;
-	/* Attempt to bridge sensors not owned by the BMC*/
-	bool bridge_sensors;
+
 	/* Cipher suite identifier to determine authentication, integrity,
 	 * and confidentiality algorithms to use.
 	 * Supported Cipher Suite IDs
@@ -80,12 +75,6 @@ typedef struct slurm_ipmi_conf {
 	 *   17 - A = HMAC-SHA256; I = HMAC-SHA256-128; C = AES-CBC-128
 	 * Pass < 0 for default.of 3.*/
 	uint32_t cipher_suite_id;
-	/* Allow sensor readings to be read even if the event/reading type
-	 * code for the sensor is not valid.  This option works around
-	 * poorly defined (and arguably illegal) SDR records that list
-	 * non-discrete sensor expectations along with discrete state
-	 * conditions.*/
-	bool discrete_reading;
 	/* Use this driver device for the IPMI driver.*/
 	char *driver_device;
 	/* Options for IPMI configuration*/
@@ -101,19 +90,8 @@ typedef struct slurm_ipmi_conf {
 	uint32_t disable_auto_probe;
 	/* Use this specified driver address instead of a probed one.*/
 	uint32_t driver_address;
-	/* Return sensor names with appropriate entity
-	 * id and instance prefixed when appropriate.*/
-	bool entity_sensor_names;
 	/* frequency for ipmi call*/
 	uint32_t freq;
-	/* Do not read sensors that cannot be interpreted.*/
-	bool ignore_non_interpretable_sensors;
-	/* Ignore the scanning bit and read sensors no matter
-	 * what.  This option works around motherboards
-	 * that incorrectly indicate sensors as disabled.*/
-	bool ignore_scanning_disabled;
-	/* Attempt to interpret OEM data if read.*/
-	bool interpret_oem_data;
 	/* BMC Key for 2-key authentication.  Pass NULL ptr to use the
 	 * default.  Standard default is the null (e.g. empty) k_g,
 	 * which will use the password as the BMC key.  The k_g key need not
@@ -133,10 +111,7 @@ typedef struct slurm_ipmi_conf {
 	 *   2 = IPMICONSOLE_PRIVILEGE_ADMIN
 	 * Pass < 0 for default of IPMICONSOLE_PRIVILEGE_ADMIN.*/
 	uint32_t privilege_level;
-	/* Options for Slurm IPMI plugin*/
-	/* sensor num (only for power) */
-	uint32_t power_sensor_num;
-	char *power_sensors;
+
 	/* Out-of-band Communication Configuration */
 	/* Indicate the IPMI protocol version to use
 	 * IPMI_MONITORING_PROTOCOL_VERSION_1_5 = 0x00,
@@ -145,16 +120,13 @@ typedef struct slurm_ipmi_conf {
 	uint32_t protocol_version;
 	/* Use this register space instead of the probed one.*/
 	uint32_t register_spacing;
-	/* Re-read the SDR cache*/
-	bool reread_sdr_cache;
 	/* Specifies the packet retransmission timeout length in
 	 * milliseconds.  Pass <= 0 to default 500 (0.5 seconds).*/
 	uint32_t retransmission_timeout;
 	/* Specifies the session timeout length in milliseconds.  Pass <= 0
 	 * to default 60000 (60 seconds).*/
 	uint32_t session_timeout;
-	/* Iterate through shared sensors if found*/
-	bool shared_sensors;
+
 	/* Timeout for the ipmi thread*/
 	uint32_t timeout;
 	/* BMC username. Pass NULL ptr for default username.  Standard
