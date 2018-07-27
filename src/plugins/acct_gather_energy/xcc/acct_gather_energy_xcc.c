@@ -341,11 +341,10 @@ static int _thread_update_node_energy(void)
 		xcc_sensor->low_mj = c_mj;
 		xcc_sensor->low_elapsed_ms = e_ms;
 	}
-
 	if (xcc_sensor->high_mj == 0 || xcc_sensor->high_mj < c_mj) {
 		xcc_sensor->high_mj = c_mj;
 		xcc_sensor->high_elapsed_ms = e_ms;
-	}       
+	}
 	/***********************************/
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("ipmi-thread: XCC current_watts: %u, "
@@ -578,20 +577,21 @@ static void *_thread_launcher(void *no_data)
 	return NULL;
 }
 
-/* FIXME: TO DO*/
+/*
+ *  _get_joules_task() issues an RPC call to slurmd in order to get the
+ * node consumption. It will store this consumption in this task, thus the
+ * plugin is not calling IPMI for each task. The difference from task to node
+ * is that the base joules are taken from the start of the task instead of
+ * from the slurmd register.
+ */
 static int _get_joules_task(uint16_t delta)
 {
 	time_t now = time(NULL);
 	static bool first = true;
-	uint64_t adjustment = 0;
-	uint16_t i;
-	acct_gather_energy_t *new, *old;
-	acct_gather_energy_t *energies = NULL;
-	/* sensors list */
 	acct_gather_energy_t *energy = NULL;
-	uint16_t sensor_cnt = 0;
-
-	if (slurm_get_node_energy(NULL, delta, &sensor_cnt, &energies)) {
+	uint16_t sensor_cnt = 0;       
+	
+	if (slurm_get_node_energy(NULL, delta, &sensor_cnt, &energy)) {
 		error("_get_joules_task: can't get info from slurmd");
 		return SLURM_ERROR;
 	}
@@ -599,79 +599,81 @@ static int _get_joules_task(uint16_t delta)
 	if (sensor_cnt != 1) {
 		error("_get_joules_task: received %u xcc sensors,"
 		      "%u expected 1", sensor_cnt);
-		acct_gather_energy_destroy(energies);
+		acct_gather_energy_destroy(energy);
 		return SLURM_ERROR;
 	}
-//////////////////////////////>>>XASXCSDCASDCASDFASD
+
 	if (first) {
-		sensors_len = sensor_cnt;
-		sensors = xmalloc(sizeof(sensor_status_t) * sensors_len);
-		start_current_energies =
-			xmalloc(sizeof(uint64_t) * sensors_len);
+		xcc_sensor = xmalloc(sizeof(sensor_status_t));
+		memset(xcc_sensor, 0, sizeof(sensor_status_t));
 	}
 
-	if (sensor_cnt != sensors_len) {
-		error("_get_joules_task: received %u sensors, %u expected",
-		      sensor_cnt, sensors_len);
-		acct_gather_energy_destroy(energies);
-		return SLURM_ERROR;
-	}
+	xcc_sensor->prev_mj = xcc_sensor->curr_mj;
 
-	for (i = 0; i < sensor_cnt; ++i) {
-		new = &energies[i];
-		old = &sensors[i].energy;
-		new->previous_consumed_energy = old->consumed_energy;
 
-		/*FMOLL: Since the last measure to now, just estimate how much
-		 consumption did we have. Note that the watts passed
-		 are the same, but not the time:*/
-		if (slurm_ipmi_conf.adjustment)
-			adjustment = _get_additional_consumption(
-				new->poll_time, now,
-				new->current_watts,
-				new->current_watts);
-
-		if (!first) {
-			new->consumed_energy -= start_current_energies[i];
-			new->base_consumed_energy = adjustment +
-				(new->consumed_energy - old->consumed_energy);
-		} else {
-			/* This is just for the step, so take all the pervious
-			   consumption out of the mix.
-			   */
-			start_current_energies[i] =
-				new->consumed_energy + adjustment;
-			new->base_consumed_energy = 0;
+	if (!first) {
+		xcc_sensor->prev_mj = curr_mj;
+		xcc_sensor->prev_read_time = xcc_sensor->curr_read_time;
+ 		xcc_sensor->curr_read_time = energy->poll_time;		
+		xcc_sensor->curr_mj = energy->consumed_energy;
+		/**** FIXME: Do we really need this here? ****/
+		//Here we record the interval with highest/lowest consumption
+		uint32_t c_mj = _consumed_last_interval_mj();
+		uint32_t e_ms = _elapsed_lastinterval_ms();
+		
+		if (xcc_sensor->low_mj == 0 || xcc_sensor->low_mj > c_mj) {
+			xcc_sensor->low_mj = c_mj;
+			xcc_sensor->low_elapsed_ms = e_ms;
 		}
-
-		new->consumed_energy = new->previous_consumed_energy
-			+ new->base_consumed_energy;
-		memcpy(old, new, sizeof(acct_gather_energy_t));
-
-		if (debug_flags & DEBUG_FLAG_ENERGY)
-			info("_get_joules_task: consumed %"PRIu64" Joules "
-			     "(received %"PRIu64"(%u watts) from slurmd)",
-			     new->consumed_energy,
-			     new->base_consumed_energy,
-			     new->current_watts);
+		if (xcc_sensor->high_mj == 0 || xcc_sensor->high_mj < c_mj) {
+			xcc_sensor->high_mj = c_mj;
+			xcc_sensor->high_elapsed_ms = e_ms;
+		}
+		/***********************************/
+	       
+	} else {
+		/* This is just for the step, so take all the pervious
+		   consumption out of the mix. */
+		xcc_sensor->first_read_time.tv_sec = energy->poll_time;
+		xcc_sensor->prev_read_time.tv_sec = energy->poll_time;
+		xcc_sensor->curr_time.tv_sec = energy->poll_time;
+		xcc_sensor->base_mj = energy->consumed_energy;
+		xcc_sensor->curr_mj = xcc_sensor->base_mj;
+		xcc_sensor->prev_mj = xcc_sensor->base_mj;
+		xcc_sensor->low_mj = xcc_sensor->base_mj;
+		xcc_sensor->high_mj = xcc_sensor->base_mj;
+		xcc_sensor->low_elapsed_ms = 0;
+		xcc_sensor->high_elapsed_ms = 0;
+	}
+	
+	if (debug_flags & DEBUG_FLAG_ENERGY) {
+		info("%s: XCC current_watts: %u, "
+		     "consumed energy last interval: %"PRIu64" miliJoules"
+		     "elapsed time last interval: %"PRIu64" miliSeconds"
+		     "first read time unix timestamp: %u.%u"
+		     "first read energy counter val: %u"
+		     __FUNC__,
+		     _curr_watts(),
+		     _consumed_last_interval_mj(),
+		     _elapsed_last_interval_ms(),
+		     xcc_sensor->first_read_time.tv_sec,
+		     xcc_sensor->first_read_time.tv_usec*1000,
+		     xcc_sensor->base_mj);
 	}
 
-	acct_gather_energy_destroy(energies);
-
+	acct_gather_energy_destroy(energy);
 	first = false;
-
 	return SLURM_SUCCESS;
 }
 
-/*
- * FIXME: need to understand what field really means.
- */
-static void _get_node_energy(acct_gather_energy_t *energy)
+/* _xcc_to_energy() translates the xcc_sensor data to an energy struct. */
+static void _xcc_to_energy(acct_gather_energy_t *energy)
 {
-	if (!xcc_sensor)
+	if (!xcc_sensor || !energy)
 		return;
 
 	memset(energy, 0, sizeof(acct_gather_energy_t));
+
 	energy->base_watts = (xcc_sensor->low_mj /
 			      xcc_sensor->low_elapsed_ms) * 1000;
 	energy->consumed_energy = (xcc_sensor->curr_mj -
@@ -680,6 +682,14 @@ static void _get_node_energy(acct_gather_energy_t *energy)
 	energy->poll_time = xcc_sensor->curr_read_time.sec;
 	energy->current_watts = _curr_watts();
 	energy->previous_consumed_energy = xcc_sensor->prev_mj * 1000;       
+}
+
+/*
+ * FIXME: need to understand what field really means.
+ */
+static void _get_node_energy(acct_gather_energy_t *energy)
+{
+	_xcc_to_energy(energy);
 }
 
 /*
@@ -738,7 +748,7 @@ extern int acct_gather_energy_p_update_node_energy(void)
 	return rc;
 }
 
-/*FIXME: Adapt to the new enerfy sensor!!*/
+/*FIXME: Adapt to the new energy sensor!!*/
 extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 					 void *data)
 {
@@ -769,7 +779,10 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		break;
 	case ENERGY_DATA_LAST_POLL:
 		slurm_mutex_lock(&ipmi_mutex);
-		*last_poll = last_update_time;
+		if (xcc_sensor)
+			*last_poll = xcc_sensor->curr_read_time;
+		else
+			*last_poll = 0;
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_SENSOR_CNT:
@@ -777,8 +790,9 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		break;
 	case ENERGY_DATA_STRUCT:
 		slurm_mutex_lock(&ipmi_mutex);
-		memcpy(&energy, &xcc_sensor.energy,
-		       sizeof(acct_gather_energy_t));
+		if (!energy)
+			energy = xmalloc(sizeof(acct_gather_energy_t));
+		_xcc_to_energy(energy)
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_JOULES_TASK:
@@ -789,8 +803,9 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		} else {
 			_get_joules_task(10);
 		}
-		memcpy(&energy, &xcc_sensor.energy,
-		       sizeof(acct_gather_energy_t));
+		if (!energy)
+			energy = xmalloc(sizeof(acct_gather_energy_t));
+		_xcc_to_energy(energy);
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	default:
