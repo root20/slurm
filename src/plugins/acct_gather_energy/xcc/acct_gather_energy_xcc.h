@@ -35,6 +35,25 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA.
 \*****************************************************************************/
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <signal.h>
+#include <errno.h>
+
+#include "src/common/slurm_xlator.h"
+#include "src/common/slurm_acct_gather_energy.h"
+#include "src/common/slurm_protocol_defs.h"
+#include "src/common/fd.h"
+#include "src/common/uid.h"
+#include "src/slurmd/common/proctrack.h"
+#include "src/slurmd/slurmd/slurmd.h"
+#include "src/common/xmalloc.h"
+#include "src/common/xstring.h"
+
+#include <freeipmi/freeipmi.h>
+
 #ifndef _IPMI_READ_CONFIG_H
 #define _IPMI_READ_CONFIG_H
 
@@ -139,7 +158,15 @@ typedef struct slurm_ipmi_conf {
 	 * default.  Standard default is 0, no modifications to the IPMI
 	 * protocol.*/
 	uint32_t workaround_flags;
-	uint32_t variable;
+	uint32_t variable;	
+
+	/* FIXME: raw specific */
+	uint32_t ipmi_flags;
+	bool target_channel_number_is_set;
+	bool target_slave_address_is_set;
+	uint8_t target_channel_number;
+	uint8_t target_slave_address;
+	
 } slurm_ipmi_conf_t;
 
 extern void reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf);

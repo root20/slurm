@@ -37,24 +37,8 @@
  *  This file is patterned after jobcomp_linux.c, written by Morris Jette and
  *  Copyright (C) 2002 The Regents of the University of California.
 \*****************************************************************************/
-#include <stdlib.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <signal.h>
-#include <errno.h>
-#include "src/common/uid.h"
-#include "src/common/slurm_xlator.h"
-#include "src/common/slurm_acct_gather_energy.h"
-#include "src/common/slurm_protocol_api.h"
-#include "src/common/slurm_protocol_defs.h"
-#include "src/common/fd.h"
-#include "src/slurmd/common/proctrack.h"
 
-#include "src/slurmd/slurmd/slurmd.h"
-#include "acct_gather_energy_xcc_config.h"
-
-#include <freeipmi/freeipmi.h>
+#include "acct_gather_energy_xcc.h"
 
 /* These are defined here so when we link with something other than
  * the slurmctld we will have these symbols defined.  They will get
@@ -123,6 +107,38 @@ static pthread_cond_t launch_cond = PTHREAD_COND_INITIALIZER;
 pthread_t thread_ipmi_id_launcher = 0;
 pthread_t thread_ipmi_id_run = 0;
 
+static void _reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf)
+{
+	if (slurm_ipmi_conf) {
+		slurm_ipmi_conf->adjustment = false;
+		slurm_ipmi_conf->authentication_type = 0;
+		slurm_ipmi_conf->cipher_suite_id = 0;
+		xfree(slurm_ipmi_conf->driver_device);
+		slurm_ipmi_conf->driver_type = 0;
+		slurm_ipmi_conf->disable_auto_probe = 0;
+		slurm_ipmi_conf->driver_address = 0;
+		slurm_ipmi_conf->freq = DEFAULT_IPMI_FREQ;
+		xfree(slurm_ipmi_conf->k_g);
+		slurm_ipmi_conf->k_g_len = 0;
+		xfree(slurm_ipmi_conf->password);
+		slurm_ipmi_conf->password = xstrdup(DEFAULT_IPMI_PASS);
+		slurm_ipmi_conf->privilege_level = 0;
+		slurm_ipmi_conf->protocol_version = 0;
+		slurm_ipmi_conf->register_spacing = 0;
+		slurm_ipmi_conf->retransmission_timeout = 0;
+		slurm_ipmi_conf->session_timeout = 0;
+		slurm_ipmi_conf->timeout = DEFAULT_IPMI_TIMEOUT;
+		xfree(slurm_ipmi_conf->username);
+		slurm_ipmi_conf->username = xstrdup(DEFAULT_IPMI_USER);
+		slurm_ipmi_conf->workaround_flags = 0; // See man 8 ipmi-raw
+		slurm_ipmi_conf->ipmi_flags = IPMI_FLAGS_DEFAULT; //IPMI_FLAGS_DEBUG_DUMP
+		slurm_ipmi_conf->target_channel_number_is_set = false;
+		slurm_ipmi_conf->target_slave_address_is_set = false;
+		slurm_ipmi_conf->target_channel_number = 0x00;
+		slurm_ipmi_conf->target_slave_address = 0x20;
+	}
+}
+
 static bool _is_thread_launcher(void)
 {
 	static bool set = false;
@@ -173,12 +189,9 @@ static int _running_profile(void)
  */
 static int _init_ipmi_config (void)
 {
+	int ret = 0;
+
 	//FIXME: SEE _inband_init in ipmi_monitoring_ipmi_communication.c !!!
-	int errnum;
-	
-	/* Initialization flags */
-	unsigned int ipmi_flags = 0; //IPMI_FLAGS_DEBUG_DUMP
-	
 	if (!(ipmi_ctx = ipmi_ctx_create())) {
 		error("ipmi_ctx_create: %s\n", strerror(errno));
 		goto cleanup;
@@ -188,12 +201,12 @@ static int _init_ipmi_config (void)
 	if (slurm_ipmi_conf.driver_type == IPMI_DEVICE_LAN_2_0 ||
 	    slurm_ipmi_conf.driver_type == IPMI_DEVICE_LAN) {
 		error ("%s: error: XCC Lenovo plugin only supports in-band"
-		       "communication");
+		       "communication", __func__);
 		goto cleanup;
 	}
 	
 	if (getuid() != 0) {
-		error ("%s: error : must be root to open ipmi devices\n", __FUNC__);
+		error ("%s: error : must be root to open ipmi devices\n", __func__);
 		goto cleanup;
 	}
 	
@@ -212,7 +225,7 @@ static int _init_ipmi_config (void)
 		{
 			error ("%s: error on ipmi_ctx_find_inband: "
 			       "%s\n",
-			       __FUNC__, ipmi_ctx_errormsg (ipmi_ctx));
+			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
 			goto cleanup;
 		}
 		
@@ -220,7 +233,7 @@ static int _init_ipmi_config (void)
 		{
 			error ("%s: error on ipmi_ctx_find_inband, "
 			       "ipmi device not found.\n",
-			       __FUNC__);
+			       __func__);
 			goto cleanup;
 		}
 	}
@@ -236,8 +249,22 @@ static int _init_ipmi_config (void)
 					  slurm_ipmi_conf.ipmi_flags) < 0))
 		{
 			error ("%s: error on ipmi_ctx_open_inband:"
-			       "%s\n",
-			       __FUNC__, ipmi_ctx_errormsg (ipmi_ctx));
+			       "%s\n"
+			       "slurm_ipmi_conf.driver_type=%u\n"
+			       "slurm_ipmi_conf.disable_auto_probe=%u\n"
+			       "slurm_ipmi_conf.driver_address=%u\n"
+			       "slurm_ipmi_conf.register_spacing=%u\n"
+			       "slurm_ipmi_conf.driver_device=%s\n"
+			       "slurm_ipmi_conf.workaround_flags=%u\n"
+			       "slurm_ipmi_conf.ipmi_flags=%u\n",
+			       __func__, ipmi_ctx_errormsg (ipmi_ctx),
+			       slurm_ipmi_conf.driver_type,
+			       slurm_ipmi_conf.disable_auto_probe,
+			       slurm_ipmi_conf.driver_address,
+			       slurm_ipmi_conf.register_spacing,
+			       slurm_ipmi_conf.driver_device,
+			       slurm_ipmi_conf.workaround_flags,
+			       slurm_ipmi_conf.ipmi_flags);
 			goto cleanup;
 		}
 	}
@@ -253,7 +280,7 @@ static int _init_ipmi_config (void)
 		{
 			error ("%s: error on ipmi_ctx_set_target:"
 			       "%s\n",
-			       __FUNC__, ipmi_ctx_errormsg (ipmi_ctx));
+			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
 			goto cleanup;
 		}
 	}
@@ -268,10 +295,11 @@ cleanup:
  * _read_ipmi_values() reads the XCC sensor doing an OEM call to ipmi.
  * It returns NULL if the reading was unable to complete.
  */
-static struct xcc_raw_single_data_t * _read_ipmi_values(void)
+static xcc_raw_single_data_t * _read_ipmi_values(void)
 {
-	struct xcc_raw_single_data_t * xcc_reading =
-		xmalloc(sizeof(xcc_reading_data_t));
+	xcc_raw_single_data_t * xcc_reading;
+
+	xcc_reading = xmalloc(sizeof(xcc_raw_single_data_t));
 	
 	/* Here we issue the XCC raw command */
 	xcc_reading->fifo_inx = 10;
@@ -296,7 +324,7 @@ static uint32_t _elapsed_last_interval_ms()
 /* FIXME: Convert this function to MACRO*/
 static uint32_t _consumed_last_interval_mj()
 {
-	xcc_sensor->curr_mj - xcc_sensor->prev_mj;
+	return xcc_sensor->curr_mj - xcc_sensor->prev_mj;
 }
 
 /* 
@@ -314,12 +342,12 @@ static uint32_t _curr_watts()
  */
 static int _thread_update_node_energy(void)
 {
-	struct xcc_raw_single_data_t * xcc_raw;
+	xcc_raw_single_data_t * xcc_raw;
 
 	xcc_raw = _read_ipmi_values();
 	
 	if (!xcc_raw) {
-		error("%s could not read XCC ipmi values");
+		error("%s could not read XCC ipmi values", __func__);
 		return SLURM_FAILURE;
 	}
 
@@ -333,7 +361,7 @@ static int _thread_update_node_energy(void)
 	/**** FIXME: Do we really need this here? ****/
 	//Here we record the interval with highest/lowest consumption
 	uint32_t c_mj = _consumed_last_interval_mj();
-	uint32_t e_ms = _elapsed_lastinterval_ms();
+	uint32_t e_ms = _elapsed_last_interval_ms();
 
 	if (xcc_sensor->low_mj == 0 || xcc_sensor->low_mj > c_mj) {
 		xcc_sensor->low_mj = c_mj;
@@ -346,10 +374,10 @@ static int _thread_update_node_energy(void)
 	/***********************************/
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("ipmi-thread: XCC current_watts: %u, "
-		     "consumed energy last interval: %"PRIu64" miliJoules"
-		     "elapsed time last interval: %"PRIu64" miliSeconds"
-		     "first read time unix timestamp: %u.%u"
-		     "first read energy counter val: %u"
+		     "consumed energy last interval: %u miliJoules"
+		     "elapsed time last interval: %u miliSeconds"
+		     "first read time unix timestamp: %ld.%ld"
+		     "first read energy counter val: %u",
 		     _curr_watts(),
 		     _consumed_last_interval_mj(),
 		     _elapsed_last_interval_ms(),
@@ -370,8 +398,7 @@ static int _thread_init(void)
 {
 	static bool first = true;
 	static bool first_init = SLURM_FAILURE;
-	struct xcc_raw_single_data_t * xcc_raw;
-	uint16_t i;
+	xcc_raw_single_data_t * xcc_raw;
 
 	if (!first)
 		return first_init;
@@ -385,15 +412,15 @@ static int _thread_init(void)
 		goto cleanup;
 	}
 
-	xcc_raw = _read_ipmi_values()
+	xcc_raw = _read_ipmi_values();	
 	if (!xcc_raw) {
-		error("%s could not read XCC ipmi values");
+		error("%s could not read XCC ipmi values", __func__);
 		goto cleanup;
 	}
 
 #if _DEBUG
 	if (xcc_sensor)
-		fatal("There is already a xcc_sensor initialized, this"
+		fatal("There is already a xcc_sensor already initialized, this"
 		      "should never happen!");
 #endif
 	xcc_sensor = xmalloc(sizeof(sensor_status_t));
@@ -434,7 +461,6 @@ static int _ipmi_send_profile(void)
 {
 	int i;
 	uint64_t data[4]; //Energy, [Max|Min|Avg]Power
-	time_t last_time = last_update_time;
 
 	if (!_running_profile())
 		return SLURM_SUCCESS;
@@ -447,9 +473,9 @@ static int _ipmi_send_profile(void)
 		dataset[3].name = xstrdup("AvgPower");
 
 		dataset[0].type = PROFILE_FIELD_UINT64;
-		dataset[1].type = PROFILE_FIELD_UINT32;
-		dataset[2].type = PROFILE_FIELD_UINT32;
-		dataset[3].type = PROFILE_FIELD_UINT32;
+		dataset[1].type = PROFILE_FIELD_UINT64;
+		dataset[2].type = PROFILE_FIELD_UINT64;
+		dataset[3].type = PROFILE_FIELD_UINT64;
 
 		dataset[4].name = NULL;
 		dataset[4].type = PROFILE_FIELD_NOT_SET;
@@ -479,7 +505,8 @@ static int _ipmi_send_profile(void)
 	data[2] += xcc_sensor->low_mj;
 	
 	data[3] += (xcc_sensor->curr_mj - xcc_sensor->base_mj) /
-		   (xcc_sensor->curr_read_time - xcc_sensor->first_read_time);
+		   (xcc_sensor->curr_read_time.tv_sec -
+		    xcc_sensor->first_read_time.tv_sec);
 	
 	if (debug_flags & DEBUG_FLAG_PROFILE) {
 		info("PROFILE-Energy: ConsumedEnergy=%"PRIu64"", data[0]);
@@ -489,7 +516,8 @@ static int _ipmi_send_profile(void)
 	}
 	
 	return acct_gather_profile_g_add_sample_data(dataset_id, (void *)data,
-						   xcc_sensor->curr_read_time);
+						     (time_t)xcc_sensor->
+						     curr_read_time.tv_sec);
 }
 
 
@@ -590,7 +618,6 @@ static void *_thread_launcher(void *no_data)
  */
 static int _get_joules_task(uint16_t delta)
 {
-	time_t now = time(NULL);
 	static bool first = true;
 	acct_gather_energy_t *energy = NULL;
 	uint16_t sensor_cnt = 0;       
@@ -601,8 +628,8 @@ static int _get_joules_task(uint16_t delta)
 	}
 
 	if (sensor_cnt != 1) {
-		error("_get_joules_task: received %u xcc sensors,"
-		      "%u expected 1", sensor_cnt);
+		error("_get_joules_task: received %u xcc sensors expected 1",
+		      sensor_cnt);
 		acct_gather_energy_destroy(energy);
 		return SLURM_ERROR;
 	}
@@ -612,18 +639,15 @@ static int _get_joules_task(uint16_t delta)
 		memset(xcc_sensor, 0, sizeof(sensor_status_t));
 	}
 
-	xcc_sensor->prev_mj = xcc_sensor->curr_mj;
-
-
 	if (!first) {
-		xcc_sensor->prev_mj = curr_mj;
+		xcc_sensor->prev_mj = xcc_sensor->curr_mj;
 		xcc_sensor->prev_read_time = xcc_sensor->curr_read_time;
- 		xcc_sensor->curr_read_time = energy->poll_time;		
+ 		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
 		xcc_sensor->curr_mj = energy->consumed_energy;
 		/**** FIXME: Do we really need this here? ****/
 		//Here we record the interval with highest/lowest consumption
 		uint32_t c_mj = _consumed_last_interval_mj();
-		uint32_t e_ms = _elapsed_lastinterval_ms();
+		uint32_t e_ms = _elapsed_last_interval_ms();
 		
 		if (xcc_sensor->low_mj == 0 || xcc_sensor->low_mj > c_mj) {
 			xcc_sensor->low_mj = c_mj;
@@ -640,7 +664,7 @@ static int _get_joules_task(uint16_t delta)
 		   consumption out of the mix. */
 		xcc_sensor->first_read_time.tv_sec = energy->poll_time;
 		xcc_sensor->prev_read_time.tv_sec = energy->poll_time;
-		xcc_sensor->curr_time.tv_sec = energy->poll_time;
+		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
 		xcc_sensor->base_mj = energy->consumed_energy;
 		xcc_sensor->curr_mj = xcc_sensor->base_mj;
 		xcc_sensor->prev_mj = xcc_sensor->base_mj;
@@ -652,11 +676,11 @@ static int _get_joules_task(uint16_t delta)
 	
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("%s: XCC current_watts: %u, "
-		     "consumed energy last interval: %"PRIu64" miliJoules"
-		     "elapsed time last interval: %"PRIu64" miliSeconds"
-		     "first read time unix timestamp: %u.%u"
-		     "first read energy counter val: %u"
-		     __FUNC__,
+		     "consumed energy last interval: %u miliJoules"
+		     "elapsed time last interval: %u miliSeconds"
+		     "first read time unix timestamp: %ld.%ld"
+		     "first read energy counter val: %u",
+		     __func__,
 		     _curr_watts(),
 		     _consumed_last_interval_mj(),
 		     _elapsed_last_interval_ms(),
@@ -683,7 +707,7 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
 	energy->consumed_energy = (xcc_sensor->curr_mj -
 				   xcc_sensor->base_mj) * 1000;
 	energy->base_consumed_energy = xcc_sensor->low_mj * 1000;
-	energy->poll_time = xcc_sensor->curr_read_time.sec;
+	energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
 	energy->current_watts = _curr_watts();
 	energy->previous_consumed_energy = xcc_sensor->prev_mj * 1000;       
 }
@@ -712,8 +736,6 @@ extern int init(void)
 
 extern int fini(void)
 {
-	uint16_t i;
-
 	if (!_run_in_daemon())
 		return SLURM_SUCCESS;
 
@@ -731,8 +753,8 @@ extern int fini(void)
 	slurm_mutex_lock(&ipmi_mutex);
 
 	if (ipmi_ctx)
-		ipmi_monitoring_ctx_destroy(ipmi_ctx);
-	reset_slurm_ipmi_conf(&slurm_ipmi_conf);
+		ipmi_ctx_destroy(ipmi_ctx);
+	_reset_slurm_ipmi_conf(&slurm_ipmi_conf);
 
 	slurm_mutex_unlock(&ipmi_mutex);
 
@@ -755,7 +777,6 @@ extern int acct_gather_energy_p_update_node_energy(void)
 extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 					 void *data)
 {
-	uint16_t i;
 	int rc = SLURM_SUCCESS;
 	acct_gather_energy_t *energy = (acct_gather_energy_t *)data;
 	time_t *last_poll = (time_t *)data;
@@ -783,7 +804,7 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 	case ENERGY_DATA_LAST_POLL:
 		slurm_mutex_lock(&ipmi_mutex);
 		if (xcc_sensor)
-			*last_poll = xcc_sensor->curr_read_time;
+			*last_poll = xcc_sensor->curr_read_time.tv_sec;
 		else
 			*last_poll = 0;
 		slurm_mutex_unlock(&ipmi_mutex);
@@ -795,7 +816,7 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		slurm_mutex_lock(&ipmi_mutex);
 		if (!energy)
 			energy = xmalloc(sizeof(acct_gather_energy_t));
-		_xcc_to_energy(energy)
+		_xcc_to_energy(energy);
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_JOULES_TASK:
@@ -878,15 +899,13 @@ extern void acct_gather_energy_p_conf_options(s_p_options_t **full_options,
 
 extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 {
-	char *tmp_char;
-
 	/* Set initial values */
-	reset_slurm_ipmi_conf(&slurm_ipmi_conf);
+	_reset_slurm_ipmi_conf(&slurm_ipmi_conf);
 
 	if (tbl) {
 		/* ipmi initialization parameters */
 		s_p_get_boolean(&(slurm_ipmi_conf.adjustment),
-				"EnergyIPMICalcAdjustment", tbl));
+				"EnergyIPMICalcAdjustment", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.authentication_type,
 			       "EnergyIPMIAuthenticationType", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.cipher_suite_id,
@@ -904,9 +923,9 @@ extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 		if ((int)slurm_ipmi_conf.freq <= 0)
 			fatal("EnergyIPMIFrequency must be a positive integer "
 			      "in acct_gather.conf.");
-		s_p_get_string(&slurm_ipmi_conf.k_g, "EnergyIPMIk_g", tbl);
-		s_p_get_uint32(&slurm_ipmi_conf.freq,
-			       "EnergyIPMIk_g_len", tbl);
+//		s_p_get_string(&slurm_ipmi_conf.k_g, "EnergyIPMIk_g", tbl);
+//		s_p_get_uint32(&slurm_ipmi_conf.freq,
+//			       "EnergyIPMIk_g_len", tbl);
 		s_p_get_string(&slurm_ipmi_conf.password,
 			       "EnergyIPMIPassword", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.privilege_level,
@@ -922,10 +941,10 @@ extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 		s_p_get_uint32(&slurm_ipmi_conf.timeout,
 			       "EnergyIPMITimeout", tbl);
 		s_p_get_string(&slurm_ipmi_conf.username,
-			       "EnergyIPMIUsername", tbl));
+			       "EnergyIPMIUsername", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.workaround_flags,
 			       "EnergyIPMIWorkaroundFlags", tbl);
-		s_p_get_uint32(&slurm_ipmi_conf.flags,
+		s_p_get_uint32(&slurm_ipmi_conf.ipmi_flags,
 			       "EnergyIPMIFlags", tbl);
 }
 
@@ -1067,3 +1086,4 @@ extern void acct_gather_energy_p_conf_values(List *data)
 	
 	return;
 }
+
