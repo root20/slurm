@@ -60,6 +60,10 @@ const char plugin_name[] = "AcctGatherEnergy XCC plugin";
 const char plugin_type[] = "acct_gather_energy/xcc";
 const uint32_t plugin_version = SLURM_VERSION_NUMBER;
 
+#if _DEBUG
+static uint32_t r = 0;
+#endif
+
 /* Global vars */
 ipmi_ctx_t ipmi_ctx = NULL;
 
@@ -106,6 +110,37 @@ static pthread_mutex_t launch_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t launch_cond = PTHREAD_COND_INITIALIZER;
 pthread_t thread_ipmi_id_launcher = 0;
 pthread_t thread_ipmi_id_run = 0;
+
+#if _DEBUG
+static void _print_xcc_sensor()
+{
+	if (!xcc_sensor) {
+		info("xcc_sensor: not initialized");
+		return;
+	}
+	info("xcc_sensor:\n"
+	     "first_read_time=%ld\n"
+	     "prev_read_time=%ld\n"
+	     "curr_read_time=%ld\n"
+	     "base_j=%d\n"
+	     "curr_j=%"PRIu64"\n"
+	     "prev_j=%"PRIu64"\n"
+	     "low_j=%d\n"
+	     "high_j=%d\n"
+	     "low_elapsed_s=%d\n"
+	     "high_elapsed_s=%d",
+	     xcc_sensor->first_read_time.tv_sec,
+	     xcc_sensor->prev_read_time.tv_sec,
+	     xcc_sensor->curr_read_time.tv_sec,
+	     xcc_sensor->base_j,
+	     xcc_sensor->curr_j,
+	     xcc_sensor->prev_j,
+	     xcc_sensor->low_j,
+	     xcc_sensor->high_j,
+	     xcc_sensor->low_elapsed_s,
+	     xcc_sensor->high_elapsed_s);
+}
+#endif
 
 static void _reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf)
 {
@@ -302,14 +337,15 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 	xcc_raw_single_data_t * xcc_reading;
 
 	xcc_reading = xmalloc(sizeof(xcc_raw_single_data_t));
-	
+
+	r += (uint32_t) (random() % 100);
+
 	/* Here we issue the XCC raw command */
 	xcc_reading->fifo_inx = 10;
-	xcc_reading->j = 20;
+	xcc_reading->j = 12 + r;
 	xcc_reading->mj = 0;
-	xcc_reading->s = 123;
+	xcc_reading->s = (uint32_t) time(NULL);
 	xcc_reading->ms = 0;
-       
 	return xcc_reading;
 }
 
@@ -332,7 +368,21 @@ static uint32_t _consumed_last_interval_j()
  */
 static uint32_t _curr_watts()
 {
-	return _consumed_last_interval_j()/_elapsed_last_interval_s();
+	uint32_t joules,seconds;
+
+	seconds =_elapsed_last_interval_s();
+	joules = _consumed_last_interval_j();
+
+#if _DEBUG
+	info("%s, joules = %d, elapsed seconds = %d",
+	     __func__,
+	     joules, seconds);
+#endif
+
+	if (joules <= 0 || seconds <= 0)
+		return 0;
+	
+	return joules/seconds;
 }
 
 /*
@@ -355,6 +405,9 @@ static int _thread_update_node_energy(void)
 	xcc_sensor->prev_j = xcc_sensor->curr_j;
 	xcc_sensor->curr_j = xcc_raw->j;
 
+#if _DEBUG
+	_print_xcc_sensor();
+#endif
 	/**** FIXME: Do we really need this here? ****/
 	//Here we record the interval with highest/lowest consumption
 	uint32_t c_j = _consumed_last_interval_j();
@@ -370,11 +423,11 @@ static int _thread_update_node_energy(void)
 	}
 	/***********************************/
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
-		info("ipmi-thread: XCC current_watts: %u, "
-		     "consumed energy last interval: %u Joules"
-		     "elapsed time last interval: %u Seconds"
-		     "first read time unix timestamp: %ld"
-		     "first read energy counter val: %u",
+		info("ipmi-thread: XCC current_watts: %u\n"
+		     "consumed energy last interval: %u Joules\n"
+		     "elapsed time last interval: %u Seconds\n"
+		     "first read time unix timestamp: %ld\n"
+		     "first read energy counter val: %u\n",
 		     _curr_watts(),
 		     _consumed_last_interval_j(),
 		     _elapsed_last_interval_s(),
@@ -694,7 +747,11 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
 
 	memset(energy, 0, sizeof(acct_gather_energy_t));
 
-	energy->base_watts = (xcc_sensor->low_j / xcc_sensor->low_elapsed_s);
+	if (xcc_sensor->low_j == 0 || xcc_sensor->low_elapsed_s == 0)
+		energy->base_watts = 0;
+	else
+		energy->base_watts = xcc_sensor->low_j /
+				     xcc_sensor->low_elapsed_s;
 	energy->consumed_energy = (xcc_sensor->curr_j - xcc_sensor->base_j);
 	energy->base_consumed_energy = xcc_sensor->low_j;
 	energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
@@ -707,6 +764,10 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
  */
 static void _get_node_energy(acct_gather_energy_t *energy)
 {
+#if _DEBUG
+	info("%s called, printing xcc info", __func__);
+	_print_xcc_sensor();
+#endif	
 	_xcc_to_energy(energy);
 }
 
