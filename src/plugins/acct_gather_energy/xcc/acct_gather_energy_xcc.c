@@ -81,13 +81,13 @@ typedef struct sensor_status {
 	struct timeval first_read_time; /* First read time in this thread */
 	struct timeval prev_read_time;  /* Previous read time */
 	struct timeval curr_read_time;  /* Current read time */
-	uint32_t base_mj; /* Initial energy sensor value (in milijoules) */ 
-	uint64_t curr_mj; /* Consumed milijoules in the last reading */
-	uint64_t prev_mj; /* Consumed milijoules in the previous reading */
-	uint32_t low_mj; /* The lowest watermark seen for consumed energy */
-	uint32_t high_mj; /* The highest watermark seen for consumed energy */
-	uint32_t low_elapsed_ms; /* Time elapsed on the lowest watermark */
-	uint32_t high_elapsed_ms; /* Time elapsed on the highest watermark */
+	uint32_t base_j; /* Initial energy sensor value (in joules) */ 
+	uint64_t curr_j; /* Consumed joules in the last reading */
+	uint64_t prev_j; /* Consumed joules in the previous reading */
+	uint32_t low_j; /* The lowest watermark seen for consumed energy */
+	uint32_t high_j; /* The highest watermark seen for consumed energy */
+	uint32_t low_elapsed_s; /* Time elapsed on the lowest watermark */
+	uint32_t high_elapsed_s; /* Time elapsed on the highest watermark */
 } sensor_status_t;
 
 static sensor_status_t * xcc_sensor = NULL;
@@ -190,7 +190,9 @@ static int _running_profile(void)
 static int _init_ipmi_config (void)
 {
 	int ret = 0;
-
+	//FIXME: DEBUG FMOLL
+	return 0;
+	
 	//FIXME: SEE _inband_init in ipmi_monitoring_ipmi_communication.c !!!
 	if (!(ipmi_ctx = ipmi_ctx_create())) {
 		error("ipmi_ctx_create: %s\n", strerror(errno));
@@ -304,27 +306,24 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 	/* Here we issue the XCC raw command */
 	xcc_reading->fifo_inx = 10;
 	xcc_reading->j = 20;
-	xcc_reading->mj = 30;
+	xcc_reading->mj = 0;
 	xcc_reading->s = 123;
-	xcc_reading->ms = 123;
+	xcc_reading->ms = 0;
        
 	return xcc_reading;
 }
 
 /* FIXME: Convert this function to MACRO*/
-static uint32_t _elapsed_last_interval_ms()
+static uint32_t _elapsed_last_interval_s()
 {
-	return  (xcc_sensor->curr_read_time.tv_sec / 1000
-		 + xcc_sensor->curr_read_time.tv_usec * 1000)
-		-
-		(xcc_sensor->prev_read_time.tv_sec / 1000
-		 + xcc_sensor->prev_read_time.tv_usec * 1000);
+	return  (xcc_sensor->curr_read_time.tv_sec
+		 - xcc_sensor->prev_read_time.tv_sec);
 }
 
 /* FIXME: Convert this function to MACRO*/
-static uint32_t _consumed_last_interval_mj()
+static uint32_t _consumed_last_interval_j()
 {
-	return xcc_sensor->curr_mj - xcc_sensor->prev_mj;
+	return xcc_sensor->curr_j - xcc_sensor->prev_j;
 }
 
 /* 
@@ -333,7 +332,7 @@ static uint32_t _consumed_last_interval_mj()
  */
 static uint32_t _curr_watts()
 {
-	return _consumed_last_interval_mj()/_elapsed_last_interval_ms() * 1000;
+	return _consumed_last_interval_j()/_elapsed_last_interval_s();
 }
 
 /*
@@ -352,38 +351,35 @@ static int _thread_update_node_energy(void)
 	}
 
 	xcc_sensor->prev_read_time.tv_sec = xcc_sensor->curr_read_time.tv_sec;
-	xcc_sensor->prev_read_time.tv_usec = xcc_sensor->curr_read_time.tv_usec;
 	xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
-	xcc_sensor->curr_read_time.tv_usec = xcc_raw->ms * 1000;
-	xcc_sensor->prev_mj = xcc_sensor->curr_mj;
-	xcc_sensor->curr_mj = xcc_raw->j*1000 + xcc_raw->mj;
+	xcc_sensor->prev_j = xcc_sensor->curr_j;
+	xcc_sensor->curr_j = xcc_raw->j;
 
 	/**** FIXME: Do we really need this here? ****/
 	//Here we record the interval with highest/lowest consumption
-	uint32_t c_mj = _consumed_last_interval_mj();
-	uint32_t e_ms = _elapsed_last_interval_ms();
+	uint32_t c_j = _consumed_last_interval_j();
+	uint32_t e_s = _elapsed_last_interval_s();
 
-	if (xcc_sensor->low_mj == 0 || xcc_sensor->low_mj > c_mj) {
-		xcc_sensor->low_mj = c_mj;
-		xcc_sensor->low_elapsed_ms = e_ms;
+	if (xcc_sensor->low_j == 0 || xcc_sensor->low_j > c_j) {
+		xcc_sensor->low_j = c_j;
+		xcc_sensor->low_elapsed_s = e_s;
 	}
-	if (xcc_sensor->high_mj == 0 || xcc_sensor->high_mj < c_mj) {
-		xcc_sensor->high_mj = c_mj;
-		xcc_sensor->high_elapsed_ms = e_ms;
+	if (xcc_sensor->high_j == 0 || xcc_sensor->high_j < c_j) {
+		xcc_sensor->high_j = c_j;
+		xcc_sensor->high_elapsed_s = e_s;
 	}
 	/***********************************/
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("ipmi-thread: XCC current_watts: %u, "
-		     "consumed energy last interval: %u miliJoules"
-		     "elapsed time last interval: %u miliSeconds"
-		     "first read time unix timestamp: %ld.%ld"
+		     "consumed energy last interval: %u Joules"
+		     "elapsed time last interval: %u Seconds"
+		     "first read time unix timestamp: %ld"
 		     "first read energy counter val: %u",
 		     _curr_watts(),
-		     _consumed_last_interval_mj(),
-		     _elapsed_last_interval_ms(),
+		     _consumed_last_interval_j(),
+		     _elapsed_last_interval_s(),
 		     xcc_sensor->first_read_time.tv_sec,
-		     xcc_sensor->first_read_time.tv_usec*1000,
-		     xcc_sensor->base_mj);
+		     xcc_sensor->base_j);
 	}
 
 	return SLURM_SUCCESS;
@@ -428,14 +424,11 @@ static int _thread_init(void)
 	
 	/* Let's fill the xcc_sensor with the first reading */
 	xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
-	xcc_sensor->first_read_time.tv_usec = xcc_raw->ms * 1000;	
 	xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
-	xcc_sensor->prev_read_time.tv_usec = xcc_raw->ms * 1000;
 	xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
-	xcc_sensor->curr_read_time.tv_usec = xcc_raw->ms * 1000;
-	xcc_sensor->base_mj = xcc_raw->j*1000 + xcc_raw->mj;
-	xcc_sensor->curr_mj = xcc_sensor->base_mj;
-	xcc_sensor->prev_mj = xcc_sensor->base_mj;
+	xcc_sensor->base_j = xcc_raw->j;
+	xcc_sensor->curr_j = xcc_raw->j;
+	xcc_sensor->prev_j = xcc_raw->j;
 	
 	if (debug_flags & DEBUG_FLAG_ENERGY)
 		info("%s thread init success", plugin_name);
@@ -498,13 +491,13 @@ static int _ipmi_send_profile(void)
 
 	/* pack an array of uint64_t with current sensors */
 	memset(data, 0, sizeof(data));
-	data[0] += xcc_sensor->curr_mj - xcc_sensor->base_mj;
+	data[0] += xcc_sensor->curr_j - xcc_sensor->base_j;
 	
 	/*FIXME: We should calculate the power here*/
-	data[1] += xcc_sensor->high_mj;
-	data[2] += xcc_sensor->low_mj;
+	data[1] += xcc_sensor->high_j;
+	data[2] += xcc_sensor->low_j;
 	
-	data[3] += (xcc_sensor->curr_mj - xcc_sensor->base_mj) /
+	data[3] += (xcc_sensor->curr_j - xcc_sensor->base_j) /
 		   (xcc_sensor->curr_read_time.tv_sec -
 		    xcc_sensor->first_read_time.tv_sec);
 	
@@ -558,13 +551,13 @@ static void *_thread_ipmi_run(void *no_data)
 
 	gettimeofday(&now, NULL);
 	later.tv_sec = now.tv_sec;
-	later.tv_nsec = now.tv_usec * 1000;
+	later.tv_nsec = 0;
 
 	/* This is the loop that gathers the ipmi data frequently */
 	while (!flag_energy_accounting_shutdown) {		
 		slurm_mutex_lock(&ipmi_mutex);
 		_thread_update_node_energy();
-		later.tv_sec += slurm_ipmi_conf.freq;		
+		later.tv_sec += slurm_ipmi_conf.freq;	
 		slurm_cond_timedwait(&ipmi_cond, &ipmi_mutex, &later);		
 		slurm_mutex_unlock(&ipmi_mutex);
 	}
@@ -585,7 +578,7 @@ static void *_thread_launcher(void *no_data)
 	/* Wait for thread launch success for a max. of EnergyIPMITimeout */
 	gettimeofday(&now, NULL);
 	timeout.tv_sec = now.tv_sec + slurm_ipmi_conf.timeout;
-        timeout.tv_nsec = now.tv_usec * 1000;
+        timeout.tv_nsec = 0;
 
 	slurm_mutex_lock(&launch_mutex);
 	slurm_cond_timedwait(&launch_cond, &launch_mutex, &timeout);
@@ -640,22 +633,22 @@ static int _get_joules_task(uint16_t delta)
 	}
 
 	if (!first) {
-		xcc_sensor->prev_mj = xcc_sensor->curr_mj;
+		xcc_sensor->prev_j = xcc_sensor->curr_j;
 		xcc_sensor->prev_read_time = xcc_sensor->curr_read_time;
  		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
-		xcc_sensor->curr_mj = energy->consumed_energy;
+		xcc_sensor->curr_j = energy->consumed_energy;
 		/**** FIXME: Do we really need this here? ****/
 		//Here we record the interval with highest/lowest consumption
-		uint32_t c_mj = _consumed_last_interval_mj();
-		uint32_t e_ms = _elapsed_last_interval_ms();
+		uint32_t c_mj = _consumed_last_interval_j();
+		uint32_t e_ms = _elapsed_last_interval_s();
 		
-		if (xcc_sensor->low_mj == 0 || xcc_sensor->low_mj > c_mj) {
-			xcc_sensor->low_mj = c_mj;
-			xcc_sensor->low_elapsed_ms = e_ms;
+		if (xcc_sensor->low_j == 0 || xcc_sensor->low_j > c_mj) {
+			xcc_sensor->low_j = c_mj;
+			xcc_sensor->low_elapsed_s = e_ms;
 		}
-		if (xcc_sensor->high_mj == 0 || xcc_sensor->high_mj < c_mj) {
-			xcc_sensor->high_mj = c_mj;
-			xcc_sensor->high_elapsed_ms = e_ms;
+		if (xcc_sensor->high_j == 0 || xcc_sensor->high_j < c_mj) {
+			xcc_sensor->high_j = c_mj;
+			xcc_sensor->high_elapsed_s = e_ms;
 		}
 		/***********************************/
 	       
@@ -665,28 +658,27 @@ static int _get_joules_task(uint16_t delta)
 		xcc_sensor->first_read_time.tv_sec = energy->poll_time;
 		xcc_sensor->prev_read_time.tv_sec = energy->poll_time;
 		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
-		xcc_sensor->base_mj = energy->consumed_energy;
-		xcc_sensor->curr_mj = xcc_sensor->base_mj;
-		xcc_sensor->prev_mj = xcc_sensor->base_mj;
-		xcc_sensor->low_mj = xcc_sensor->base_mj;
-		xcc_sensor->high_mj = xcc_sensor->base_mj;
-		xcc_sensor->low_elapsed_ms = 0;
-		xcc_sensor->high_elapsed_ms = 0;
+		xcc_sensor->base_j = energy->consumed_energy;
+		xcc_sensor->curr_j = xcc_sensor->base_j;
+		xcc_sensor->prev_j = xcc_sensor->base_j;
+		xcc_sensor->low_j = xcc_sensor->base_j;
+		xcc_sensor->high_j = xcc_sensor->base_j;
+		xcc_sensor->low_elapsed_s = 0;
+		xcc_sensor->high_elapsed_s = 0;
 	}
 	
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("%s: XCC current_watts: %u, "
-		     "consumed energy last interval: %u miliJoules"
-		     "elapsed time last interval: %u miliSeconds"
-		     "first read time unix timestamp: %ld.%ld"
+		     "consumed energy last interval: %u Joules"
+		     "elapsed time last interval: %u Seconds"
+		     "first read time unix timestamp: %ld"
 		     "first read energy counter val: %u",
 		     __func__,
 		     _curr_watts(),
-		     _consumed_last_interval_mj(),
-		     _elapsed_last_interval_ms(),
+		     _consumed_last_interval_j(),
+		     _elapsed_last_interval_s(),
 		     xcc_sensor->first_read_time.tv_sec,
-		     xcc_sensor->first_read_time.tv_usec*1000,
-		     xcc_sensor->base_mj);
+		     xcc_sensor->base_j);
 	}
 
 	acct_gather_energy_destroy(energy);
@@ -702,14 +694,12 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
 
 	memset(energy, 0, sizeof(acct_gather_energy_t));
 
-	energy->base_watts = (xcc_sensor->low_mj /
-			      xcc_sensor->low_elapsed_ms) * 1000;
-	energy->consumed_energy = (xcc_sensor->curr_mj -
-				   xcc_sensor->base_mj) * 1000;
-	energy->base_consumed_energy = xcc_sensor->low_mj * 1000;
+	energy->base_watts = (xcc_sensor->low_j / xcc_sensor->low_elapsed_s);
+	energy->consumed_energy = (xcc_sensor->curr_j - xcc_sensor->base_j);
+	energy->base_consumed_energy = xcc_sensor->low_j;
 	energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
 	energy->current_watts = _curr_watts();
-	energy->previous_consumed_energy = xcc_sensor->prev_mj * 1000;       
+	energy->previous_consumed_energy = xcc_sensor->prev_j;
 }
 
 /*
