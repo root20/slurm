@@ -108,9 +108,7 @@ typedef struct sensor_status {
 
 static sensor_status_t * xcc_sensor = NULL;
 
-// FIXME: TO CLEAN ////////////////////////////////////////////////////////////
 static int dataset_id = -1; /* id of the dataset for profile data */
-
 static slurm_ipmi_conf_t slurm_ipmi_conf;
 static uint64_t debug_flags = 0;
 
@@ -428,7 +426,10 @@ cleanup:
 	return SLURM_FAILURE;
 }
 
-/*FIXME: To check everything*/
+/*
+ * _ipmi_send_profile() fills a new dataset with the sensor information and
+ * sends it to the profiling plugin.
+ */
 static int _ipmi_send_profile(void)
 {
 	int i;
@@ -446,9 +447,9 @@ static int _ipmi_send_profile(void)
 		dataset[3].name = xstrdup("AvgPower");
 
 		dataset[0].type = PROFILE_FIELD_UINT64;
-		dataset[1].type = PROFILE_FIELD_UINT64;
-		dataset[2].type = PROFILE_FIELD_UINT64;
-		dataset[3].type = PROFILE_FIELD_UINT64;
+		dataset[1].type = PROFILE_FIELD_UINT32;
+		dataset[2].type = PROFILE_FIELD_UINT32;
+		dataset[3].type = PROFILE_FIELD_UINT32;
 
 		dataset[4].name = NULL;
 		dataset[4].type = PROFILE_FIELD_NOT_SET;
@@ -471,21 +472,24 @@ static int _ipmi_send_profile(void)
 
 	/* pack an array of uint64_t with current sensors */
 	memset(data, 0, sizeof(data));
-	data[0] += xcc_sensor.energy.current_watts;
-	data[1] += xcc_sensor.energy.current_watts;//FIXME
-	data[2] += xcc_sensor.energy.current_watts;//FIXME
-	data[3] += xcc_sensor.energy.current_watts;//FIXME
-	last_time = xcc_sensor.energy.poll_time;
+	data[0] += xcc_sensor->curr_mj - xcc_sensor->base_mj;
+	
+	/*FIXME: We should calculate the power here*/
+	data[1] += xcc_sensor->high_mj;
+	data[2] += xcc_sensor->low_mj;
+	
+	data[3] += (xcc_sensor->curr_mj - xcc_sensor->base_mj) /
+		   (xcc_sensor->curr_read_time - xcc_sensor->first_read_time);
 	
 	if (debug_flags & DEBUG_FLAG_PROFILE) {
 		info("PROFILE-Energy: ConsumedEnergy=%"PRIu64"", data[0]);
-		info("PROFILE-Energy: MaxPower=%"PRIu64"", data[0]);
-		info("PROFILE-Energy: MinPower=%"PRIu64"", data[0]);
-		info("PROFILE-Energy: AvgPower=%"PRIu64"", data[0]);
+		info("PROFILE-Energy: MaxPower=%"PRIu64"", data[1]);
+		info("PROFILE-Energy: MinPower=%"PRIu64"", data[2]);
+		info("PROFILE-Energy: AvgPower=%"PRIu64"", data[3]);
 	}
 	
 	return acct_gather_profile_g_add_sample_data(dataset_id, (void *)data,
-						     last_time);
+						   xcc_sensor->curr_read_time);
 }
 
 
@@ -748,7 +752,6 @@ extern int acct_gather_energy_p_update_node_energy(void)
 	return rc;
 }
 
-/*FIXME: Adapt to the new energy sensor!!*/
 extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 					 void *data)
 {
