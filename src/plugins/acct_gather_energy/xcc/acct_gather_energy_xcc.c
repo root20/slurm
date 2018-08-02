@@ -39,6 +39,7 @@
 \*****************************************************************************/
 
 #include "acct_gather_energy_xcc.h"
+#include <math.h>
 
 /* These are defined here so when we link with something other than
  * the slurmctld we will have these symbols defined.  They will get
@@ -374,15 +375,15 @@ static uint32_t _curr_watts()
 	joules = _consumed_last_interval_j();
 
 #if _DEBUG
-	info("%s, joules = %d, elapsed seconds = %d",
+	info("%s, joules = %d, elapsed seconds = %d, watts: %d",
 	     __func__,
-	     joules, seconds);
+	     joules, seconds, (uint32_t) round((double) joules/seconds));
 #endif
 
 	if (joules <= 0 || seconds <= 0)
 		return 0;
 	
-	return joules/seconds;
+	return (uint32_t) round((double) joules/seconds);
 }
 
 /*
