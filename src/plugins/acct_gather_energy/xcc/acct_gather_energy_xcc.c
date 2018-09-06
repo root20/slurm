@@ -56,14 +56,11 @@ slurmd_conf_t *conf = NULL;
 #define IPMI_VERSION 2		/* Data structure version number */
 #define MAX_LOG_ERRORS 5	/* Max sensor reading errors log messages */
 #define XCC_MIN_RES 50         /* Minimum resolution for XCC readings, in ms */
+#define IPMI_RAW_MAX_ARGS (65536*2) /* Max ipmi response length*/	
 
 const char plugin_name[] = "AcctGatherEnergy XCC plugin";
 const char plugin_type[] = "acct_gather_energy/xcc";
 const uint32_t plugin_version = SLURM_VERSION_NUMBER;
-
-#if _DEBUG
-static uint32_t r = 0;
-#endif
 
 /* Global vars */
 ipmi_ctx_t ipmi_ctx = NULL;
@@ -336,17 +333,61 @@ cleanup:
 static xcc_raw_single_data_t * _read_ipmi_values(void)
 {
 	xcc_raw_single_data_t * xcc_reading;
+	uint8_t *buf_rs;
+	int i;
+	int rs_len = 0;
+	if (!IPMI_NET_FN_RQ_VALID(cmd_rq[1])) {
+                error("Invalid netfn value\n");
+		return 0;
+	}
 
+        buf_rs = xmalloc(IPMI_RAW_MAX_ARGS * sizeof (uint8_t));
+        rs_len = ipmi_cmd_raw(ipmi_ctx,
+                              cmd_rq[0], //Lun (logical unit number)
+                              cmd_rq[1], //Net Function
+                              &cmd_rq[2], //Command number + request data
+                              cmd_rq_len - 2, //Length (in bytes)
+                              buf_rs, //response buffer
+                              IPMI_RAW_MAX_ARGS //max response length
+                );
+
+        debug3("ipmi_cmd_raw: %s\n", ipmi_ctx_errormsg(ipmi_ctx));
+
+        if (rs_len < 0) {
+		error("Invalid ipmi response length");
+                xfree(buf_rs);
+		return 0;	       
+	}
+
+	/* Because of memory alineation we must copy the data from the buffer */
 	xcc_reading = xmalloc(sizeof(xcc_raw_single_data_t));
+	memcpy(&xcc_reading->fifo_inx, buf_rs+2, 2);
+        memcpy(&xcc_reading->j, buf_rs+4, 4);
+        memcpy(&xcc_reading->mj, buf_rs+8, 2);
+        memcpy(&xcc_reading->s, buf_rs+10, 4);
+        memcpy(&xcc_reading->ms, buf_rs+14, 2);
 
-	r += (uint32_t) (random() % 100);
-
-	/* Here we issue the XCC raw command */
-	xcc_reading->fifo_inx = 10;
-	xcc_reading->j = 12 + r;
-	xcc_reading->mj = 0;
-	xcc_reading->s = (uint32_t) time(NULL);
-	xcc_reading->ms = 0;
+#if _DEBUG	
+        printf("sent: ");
+        for (i = 0; i < cmd_rq_len; i++)
+                printf("%02X ", cmd_rq[i]);
+        printf("\nrcvd: ");
+        for (i = 0; i < cmd_rq_len+100; i++)
+                printf("%02X ", buf_rs[i]);
+        printf("\n");
+        
+	printf("0x%04x xcc_reading->fifo_inx = %d,"
+	       "0x%08x xcc_reading->j = %d ,"
+               "0x%04x xcc_reading->mj = %d ,"
+               "0x%08x xcc_reading->s = %d , "
+               "0x%04x xcc_reading->ms %d\n",
+	       xcc_reading->fifo_inx, xcc_reading->fifo_inx,
+               xcc_reading->j, xcc_reading->j,
+	       xcc_reading->mj, xcc_reading->mj,
+	       xcc_reading->s, xcc_reading->s,
+	       xcc_reading->ms, xcc_reading->ms);
+#endif
+	xfree(buf_rs);
 	return xcc_reading;
 }
 
