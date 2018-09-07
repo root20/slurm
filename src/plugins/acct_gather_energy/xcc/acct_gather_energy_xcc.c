@@ -222,32 +222,38 @@ static int _running_profile(void)
  */
 static int _init_ipmi_config (void)
 {
-	int ret = 0;
-	//FIXME: DEBUG FMOLL
-	return 0;
-	
 	//FIXME: SEE _inband_init in ipmi_monitoring_ipmi_communication.c !!!
+	//and parse_get_freeipmi_inband_flags(slurm_ipmi_conf.workaround_flags_inband, &workaround_flags);	
+	int ret = 0;
+	unsigned int workaround_flags_mask =
+		(IPMI_WORKAROUND_FLAGS_INBAND_ASSUME_IO_BASE_ADDRESS
+		 | IPMI_WORKAROUND_FLAGS_INBAND_SPIN_POLL);
+
 	if (!(ipmi_ctx = ipmi_ctx_create())) {
 		error("ipmi_ctx_create: %s\n", strerror(errno));
 		goto cleanup;
 	}
-	
-	/* XCC OEM commands always require to use in-band communication */
-	if (slurm_ipmi_conf.driver_type == IPMI_DEVICE_LAN_2_0 ||
-	    slurm_ipmi_conf.driver_type == IPMI_DEVICE_LAN) {
-		error ("%s: error: XCC Lenovo plugin only supports in-band"
-		       "communication", __func__);
-		goto cleanup;
-	}
-	
+
 	if (getuid() != 0) {
 		error ("%s: error : must be root to open ipmi devices\n", __func__);
 		goto cleanup;
 	}
+
+	/* XCC OEM commands always require to use in-band communication */
+	if ((slurm_ipmi_conf.driver_type >= 0
+	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_KCS
+	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_SSIF
+	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_OPENIPMI
+	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_SUNBMC)
+	    || (slurm_ipmi_conf.workaround_flags & ~workaround_flags_mask)) {
+		/* IPMI ERROR PARAMETERS */
+		error ("%s: error: XCC Lenovo plugin only supports in-band"
+		       "communication, incorrect driver type or workaround"
+		       "flags incorrect", __func__);
+		goto cleanup;
+	}
 	
-        //FIXME: parse_get_freeipmi_inband_flags (slurm_ipmi_conf.workaround_flags_inband, &workaround_flags);
-	
-	if (slurm_ipmi_conf.driver_type == IPMI_DEVICE_UNKNOWN)
+	if (slurm_ipmi_conf.driver_type < 0)
 	{
 		if ((ret = ipmi_ctx_find_inband (ipmi_ctx,
 						 NULL,
@@ -256,19 +262,27 @@ static int _init_ipmi_config (void)
 						 slurm_ipmi_conf.register_spacing,
 						 slurm_ipmi_conf.driver_device,
 						 slurm_ipmi_conf.workaround_flags,
-						 slurm_ipmi_conf.ipmi_flags)) < 0)
+						 slurm_ipmi_conf.ipmi_flags)) <= 0)
 		{
 			error ("%s: error on ipmi_ctx_find_inband: "
 			       "%s\n",
-			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
-			goto cleanup;
-		}
-		
-		if (ret == 0)
-		{
-			error ("%s: error on ipmi_ctx_find_inband, "
-			       "ipmi device not found.\n",
-			       __func__);
+			       __func__, ipmi_ctx_errormsg(ipmi_ctx));
+
+			debug("slurm_ipmi_conf.driver_type=%u\n"
+			      "slurm_ipmi_conf.disable_auto_probe=%u\n"
+			      "slurm_ipmi_conf.driver_address=%u\n"
+			      "slurm_ipmi_conf.register_spacing=%u\n"
+			      "slurm_ipmi_conf.driver_device=%s\n"
+			      "slurm_ipmi_conf.workaround_flags=%u\n"
+			      "slurm_ipmi_conf.ipmi_flags=%u\n",
+			      slurm_ipmi_conf.driver_type,
+			      slurm_ipmi_conf.disable_auto_probe,
+			      slurm_ipmi_conf.driver_address,
+			      slurm_ipmi_conf.register_spacing,
+			      slurm_ipmi_conf.driver_device,
+			      slurm_ipmi_conf.workaround_flags,
+			      slurm_ipmi_conf.ipmi_flags);
+
 			goto cleanup;
 		}
 	}
@@ -283,33 +297,31 @@ static int _init_ipmi_config (void)
 					  slurm_ipmi_conf.workaround_flags,
 					  slurm_ipmi_conf.ipmi_flags) < 0))
 		{
-			error ("%s: error on ipmi_ctx_open_inband:"
-			       "%s\n"
-			       "slurm_ipmi_conf.driver_type=%u\n"
-			       "slurm_ipmi_conf.disable_auto_probe=%u\n"
-			       "slurm_ipmi_conf.driver_address=%u\n"
-			       "slurm_ipmi_conf.register_spacing=%u\n"
-			       "slurm_ipmi_conf.driver_device=%s\n"
-			       "slurm_ipmi_conf.workaround_flags=%u\n"
-			       "slurm_ipmi_conf.ipmi_flags=%u\n",
-			       __func__, ipmi_ctx_errormsg (ipmi_ctx),
-			       slurm_ipmi_conf.driver_type,
-			       slurm_ipmi_conf.disable_auto_probe,
-			       slurm_ipmi_conf.driver_address,
-			       slurm_ipmi_conf.register_spacing,
-			       slurm_ipmi_conf.driver_device,
-			       slurm_ipmi_conf.workaround_flags,
-			       slurm_ipmi_conf.ipmi_flags);
+			error ("%s: error on ipmi_ctx_open_inband: %s\n",
+			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
+
+			debug("slurm_ipmi_conf.driver_type=%u\n"
+			      "slurm_ipmi_conf.disable_auto_probe=%u\n"
+			      "slurm_ipmi_conf.driver_address=%u\n"
+			      "slurm_ipmi_conf.register_spacing=%u\n"
+			      "slurm_ipmi_conf.driver_device=%s\n"
+			      "slurm_ipmi_conf.workaround_flags=%u\n"
+			      "slurm_ipmi_conf.ipmi_flags=%u\n",
+			      slurm_ipmi_conf.driver_type,
+			      slurm_ipmi_conf.disable_auto_probe,
+			      slurm_ipmi_conf.driver_address,
+			      slurm_ipmi_conf.register_spacing,
+			      slurm_ipmi_conf.driver_device,
+			      slurm_ipmi_conf.workaround_flags,
+			      slurm_ipmi_conf.ipmi_flags);
 			goto cleanup;
 		}
 	}
-	
-	
-	
+
 	if (slurm_ipmi_conf.target_channel_number_is_set
 	    || slurm_ipmi_conf.target_slave_address_is_set)
 	{
-		if (ipmi_ctx_set_target (ipmi_ctx,
+		if (ipmi_ctx_set_target(ipmi_ctx,
 					 slurm_ipmi_conf.target_channel_number_is_set ? &slurm_ipmi_conf.target_channel_number : NULL,
 					 slurm_ipmi_conf.target_slave_address_is_set ? &slurm_ipmi_conf.target_slave_address : NULL) < 0)
 		{
@@ -319,7 +331,9 @@ static int _init_ipmi_config (void)
 			goto cleanup;
 		}
 	}
+
 	return SLURM_SUCCESS;
+
 cleanup:
 	ipmi_ctx_close(ipmi_ctx);
 	ipmi_ctx_destroy(ipmi_ctx);
