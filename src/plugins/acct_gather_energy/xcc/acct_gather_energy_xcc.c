@@ -147,7 +147,7 @@ static void _reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf)
 		slurm_ipmi_conf->authentication_type = 0;
 		slurm_ipmi_conf->cipher_suite_id = 0;
 		xfree(slurm_ipmi_conf->driver_device);
-		slurm_ipmi_conf->driver_type = 0;
+		slurm_ipmi_conf->driver_type = NO_VAL;
 		slurm_ipmi_conf->disable_auto_probe = 0;
 		slurm_ipmi_conf->driver_address = 0;
 		slurm_ipmi_conf->freq = DEFAULT_IPMI_FREQ;
@@ -240,20 +240,27 @@ static int _init_ipmi_config (void)
 	}
 
 	/* XCC OEM commands always require to use in-band communication */
-	if ((slurm_ipmi_conf.driver_type >= 0
-	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_KCS
-	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_SSIF
-	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_OPENIPMI
-	     && slurm_ipmi_conf.driver_type != IPMI_DEVICE_SUNBMC)
+	if ((slurm_ipmi_conf.driver_type > 0 &&
+	     slurm_ipmi_conf.driver_type != NO_VAL &&
+	     slurm_ipmi_conf.driver_type != IPMI_DEVICE_KCS &&
+	     slurm_ipmi_conf.driver_type != IPMI_DEVICE_SSIF &&
+	     slurm_ipmi_conf.driver_type != IPMI_DEVICE_OPENIPMI &&
+	     slurm_ipmi_conf.driver_type != IPMI_DEVICE_SUNBMC)
 	    || (slurm_ipmi_conf.workaround_flags & ~workaround_flags_mask)) {
 		/* IPMI ERROR PARAMETERS */
-		error ("%s: error: XCC Lenovo plugin only supports in-band"
-		       "communication, incorrect driver type or workaround"
-		       "flags incorrect", __func__);
+		error ("%s: error: XCC Lenovo plugin only supports in-band "
+		       "communication, incorrect driver type or workaround "
+		       "flags", __func__);
+
+		debug("slurm_ipmi_conf.driver_type=%u"
+		      "slurm_ipmi_conf.workaround_flags=%u",
+		      slurm_ipmi_conf.driver_type,
+		      slurm_ipmi_conf.workaround_flags);
+
 		goto cleanup;
 	}
 	
-	if (slurm_ipmi_conf.driver_type < 0)
+	if (slurm_ipmi_conf.driver_type == NO_VAL)
 	{
 		if ((ret = ipmi_ctx_find_inband (ipmi_ctx,
 						 NULL,
@@ -264,8 +271,7 @@ static int _init_ipmi_config (void)
 						 slurm_ipmi_conf.workaround_flags,
 						 slurm_ipmi_conf.ipmi_flags)) <= 0)
 		{
-			error ("%s: error on ipmi_ctx_find_inband: "
-			       "%s\n",
+			error ("%s: error on ipmi_ctx_find_inband: %s",
 			       __func__, ipmi_ctx_errormsg(ipmi_ctx));
 
 			debug("slurm_ipmi_conf.driver_type=%u\n"
@@ -297,7 +303,7 @@ static int _init_ipmi_config (void)
 					  slurm_ipmi_conf.workaround_flags,
 					  slurm_ipmi_conf.ipmi_flags) < 0))
 		{
-			error ("%s: error on ipmi_ctx_open_inband: %s\n",
+			error ("%s: error on ipmi_ctx_open_inband: %s",
 			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
 
 			debug("slurm_ipmi_conf.driver_type=%u\n"
@@ -325,8 +331,7 @@ static int _init_ipmi_config (void)
 					 slurm_ipmi_conf.target_channel_number_is_set ? &slurm_ipmi_conf.target_channel_number : NULL,
 					 slurm_ipmi_conf.target_slave_address_is_set ? &slurm_ipmi_conf.target_slave_address : NULL) < 0)
 		{
-			error ("%s: error on ipmi_ctx_set_target:"
-			       "%s\n",
+			error ("%s: error on ipmi_ctx_set_target: %s",
 			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
 			goto cleanup;
 		}
