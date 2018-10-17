@@ -120,14 +120,6 @@ typedef struct slurm_ipmi_conf {
 	uint32_t driver_address;
 	/* frequency for ipmi call*/
 	uint32_t freq;
-	/* BMC Key for 2-key authentication.  Pass NULL ptr to use the
-	 * default.  Standard default is the null (e.g. empty) k_g,
-	 * which will use the password as the BMC key.  The k_g key need not
-	 * be an ascii string.*/
-	unsigned char *k_g;
-	/* Length of k_g.  Necessary b/c k_g may contain null values in its
-	 * key.  Maximum length of 20 bytes.*/
-	uint32_t k_g_len;
 	/* BMC password. Pass NULL ptr for default password.  Standard
 	 * default is the null (e.g. empty) password.  Maximum length of 20
 	 * bytes.*/
