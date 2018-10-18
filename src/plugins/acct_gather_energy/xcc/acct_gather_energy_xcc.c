@@ -482,7 +482,9 @@ static int _thread_update_node_energy(void)
 {
 	xcc_raw_single_data_t * xcc_raw;
 	uint32_t offset;
+	uint32_t now, c_j, e_s;
 
+	now = time(NULL);
 	xcc_raw = _read_ipmi_values();
 
 	if (!xcc_raw) {
@@ -490,7 +492,6 @@ static int _thread_update_node_energy(void)
 		return SLURM_FAILURE;
 	}
 
-	xcc_sensor->poll_time = time(NULL);
 	xcc_sensor->prev_read_time.tv_sec = xcc_sensor->curr_read_time.tv_sec;
 	xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
 	xcc_sensor->prev_j = xcc_sensor->curr_j;
@@ -513,17 +514,23 @@ static int _thread_update_node_energy(void)
 	_print_xcc_sensor();
 #endif
 	/* Record the interval with highest/lowest consumption. */
-	uint32_t c_j = _consumed_last_interval_j();
-	uint32_t e_s = _elapsed_last_interval_s();
+	c_j = _consumed_last_interval_j();
+	e_s = _elapsed_last_interval_s();
 
-	if (xcc_sensor->low_j == 0 || xcc_sensor->low_j > c_j) {
+	/* Wait at least one cycle to set values*/
+	if ((xcc_sensor->low_j == 0 || xcc_sensor->low_j > c_j) &&
+	    ((now - xcc_sensor->poll_time) >= slurm_ipmi_conf.freq)) {
 		xcc_sensor->low_j = c_j;
 		xcc_sensor->low_elapsed_s = e_s;
 	}
-	if (xcc_sensor->high_j == 0 || xcc_sensor->high_j < c_j) {
+	if (xcc_sensor->high_j < c_j &&
+	    ((now - xcc_sensor->poll_time) >= slurm_ipmi_conf.freq)) {
 		xcc_sensor->high_j = c_j;
 		xcc_sensor->high_elapsed_s = e_s;
 	}
+
+	/* Last metrics gathered now */
+	xcc_sensor->poll_time = now;
 
 	if (debug_flags & DEBUG_FLAG_ENERGY) {
 		info("ipmi-thread: XCC current_watts: %u\n"
@@ -597,6 +604,8 @@ static int _thread_init(void)
 	  xcc_sensor->base_j = xcc_raw->j;
 	  xcc_sensor->curr_j = xcc_raw->j;
 	  xcc_sensor->prev_j = xcc_raw->j;
+	  xcc_sensor->low_j = 0;
+	  xcc_sensor->high_j = 0;
 	} else {
 	  debug3("There is a xcc_sensor already initialized, we are a child: %ld", syscall(SYS_gettid));
 	}	 
