@@ -411,27 +411,6 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
         memcpy(&xcc_reading->mj, buf_rs+8, 2);
         memcpy(&xcc_reading->s, buf_rs+10, 4);
         memcpy(&xcc_reading->ms, buf_rs+14, 2);
-
-#if _DEBUG	
-        printf("sent: ");
-        for (i = 0; i < cmd_rq_len; i++)
-                printf("%02X ", cmd_rq[i]);
-        printf("\nrcvd: ");
-        for (i = 0; i < cmd_rq_len+100; i++)
-                printf("%02X ", buf_rs[i]);
-        printf("\n");
-        
-	printf("0x%04x xcc_reading->fifo_inx = %d,"
-	       "0x%08x xcc_reading->j = %d ,"
-               "0x%04x xcc_reading->mj = %d ,"
-               "0x%08x xcc_reading->s = %d , "
-               "0x%04x xcc_reading->ms %d\n",
-	       xcc_reading->fifo_inx, xcc_reading->fifo_inx,
-               xcc_reading->j, xcc_reading->j,
-	       xcc_reading->mj, xcc_reading->mj,
-	       xcc_reading->s, xcc_reading->s,
-	       xcc_reading->ms, xcc_reading->ms);
-#endif
 	xfree(buf_rs);
 	return xcc_reading;
 }
