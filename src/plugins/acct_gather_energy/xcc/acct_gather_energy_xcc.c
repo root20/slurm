@@ -91,7 +91,8 @@ typedef struct sensor_status {
 
 /* Global vars */
 
-uint8_t cmd_rq[8] = { 0x00, 0x3A, 0x32, 4, 2, 0, 0, 0 }; /* LUN, NetFN, CMD, Data[n]*/
+/* LUN, NetFN, CMD, Data[n]*/
+uint8_t cmd_rq[8] = { 0x00, 0x3A, 0x32, 4, 2, 0, 0, 0 };
 unsigned int cmd_rq_len = 8;
 
 static sensor_status_t * xcc_sensor = NULL;
@@ -171,7 +172,7 @@ static void _reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf)
 		xfree(slurm_ipmi_conf->username);
 		slurm_ipmi_conf->username = xstrdup(DEFAULT_IPMI_USER);
 		slurm_ipmi_conf->workaround_flags = 0; // See man 8 ipmi-raw
-		slurm_ipmi_conf->ipmi_flags = IPMI_FLAGS_DEFAULT; //IPMI_FLAGS_DEBUG_DUMP
+		slurm_ipmi_conf->ipmi_flags = IPMI_FLAGS_DEFAULT;
 		slurm_ipmi_conf->target_channel_number_is_set = false;
 		slurm_ipmi_conf->target_slave_address_is_set = false;
 		slurm_ipmi_conf->target_channel_number = 0x00;
@@ -245,8 +246,8 @@ static int _init_ipmi_config (void)
 		 | IPMI_WORKAROUND_FLAGS_INBAND_SPIN_POLL);
 
 	if (ipmi_ctx != NULL) {
-	  debug("ipmi_ctx already initialized\n");
-	  return SLURM_SUCCESS;
+		debug("ipmi_ctx already initialized\n");
+		return SLURM_SUCCESS;
 	}
 
 	if (!(ipmi_ctx = ipmi_ctx_create())) {
@@ -255,7 +256,8 @@ static int _init_ipmi_config (void)
 	}
 
 	if (getuid() != 0) {
-		error ("%s: error : must be root to open ipmi devices\n", __func__);
+		error ("%s: error : must be root to open ipmi devices\n",
+		       __func__);
 		goto cleanup;
 	}
 
@@ -282,14 +284,15 @@ static int _init_ipmi_config (void)
 	
 	if (slurm_ipmi_conf.driver_type == NO_VAL)
 	{
-		if ((ret = ipmi_ctx_find_inband (ipmi_ctx,
-						 NULL,
-						 slurm_ipmi_conf.disable_auto_probe,
-						 slurm_ipmi_conf.driver_address,
-						 slurm_ipmi_conf.register_spacing,
-						 slurm_ipmi_conf.driver_device,
-						 slurm_ipmi_conf.workaround_flags,
-						 slurm_ipmi_conf.ipmi_flags)) <= 0)
+		if ((ret = ipmi_ctx_find_inband(
+			     ipmi_ctx,
+			     NULL,
+			     slurm_ipmi_conf.disable_auto_probe,
+			     slurm_ipmi_conf.driver_address,
+			     slurm_ipmi_conf.register_spacing,
+			     slurm_ipmi_conf.driver_device,
+			     slurm_ipmi_conf.workaround_flags,
+			     slurm_ipmi_conf.ipmi_flags)) <= 0)
 		{
 			error ("%s: error on ipmi_ctx_find_inband: %s",
 			       __func__, ipmi_ctx_errormsg(ipmi_ctx));
@@ -348,15 +351,15 @@ static int _init_ipmi_config (void)
 	    || slurm_ipmi_conf.target_slave_address_is_set)
 	{
 		if (ipmi_ctx_set_target(ipmi_ctx,
-					 slurm_ipmi_conf.target_channel_number_is_set ?
+					slurm_ipmi_conf.target_channel_number_is_set ?
 					&slurm_ipmi_conf.target_channel_number : NULL,
-					 slurm_ipmi_conf.target_slave_address_is_set ?
+					slurm_ipmi_conf.target_slave_address_is_set ?
 					&slurm_ipmi_conf.target_slave_address : NULL) < 0)
-		  {
-		    error ("%s: error on ipmi_ctx_set_target: %s",
-			   __func__, ipmi_ctx_errormsg (ipmi_ctx));
-		    goto cleanup;
-		  }
+		{
+			error ("%s: error on ipmi_ctx_set_target: %s",
+			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
+			goto cleanup;
+		}
 	}
 
 	return SLURM_SUCCESS;
@@ -377,9 +380,6 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 	uint8_t *buf_rs;
 	int i;
 	int rs_len = 0;
-
-	debug("FMOLL: I am inquiring the IPMI, tid %ld progrname %s, ipmi_ctx is %p and xcc_sensor is %p",
-	      syscall(SYS_gettid), slurm_prog_name, ipmi_ctx, xcc_sensor);
 
 	if (!IPMI_NET_FN_RQ_VALID(cmd_rq[1])) {
                 error("Invalid netfn value\n");
@@ -404,7 +404,7 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 		return 0;	       
 	}
 
-	/* Because of memory alineation we must copy the data from the buffer */
+	/* Due to memory alineation we must copy the data from the buffer */
 	xcc_reading = xmalloc(sizeof(xcc_raw_single_data_t));
 	memcpy(&xcc_reading->fifo_inx, buf_rs+2, 2);
         memcpy(&xcc_reading->j, buf_rs+4, 4);
@@ -440,7 +440,7 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 static uint32_t _elapsed_last_interval_s()
 {
         uint32_t elapsed = xcc_sensor->curr_read_time.tv_sec -
-	                   xcc_sensor->prev_read_time.tv_sec;
+		xcc_sensor->prev_read_time.tv_sec;
 	return (elapsed < 0) ? 0 : elapsed;
 }
 
@@ -461,13 +461,6 @@ static uint32_t _curr_watts()
 
 	seconds =_elapsed_last_interval_s();
 	joules = _consumed_last_interval_j();
-
-#if _DEBUG
-	info("%s, joules = %d, elapsed seconds = %d, watts: %d",
-	     __func__,
-	     joules, seconds, (uint32_t) round((double) joules/seconds));
-#endif
-
 	if (joules <= 0 || seconds <= 0)
 		return 0;
 	
@@ -498,13 +491,13 @@ static int _thread_update_node_energy(void)
 
 	/* Detect an overflow */
 	offset =  xcc_raw->j +
-	          (IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
-                  xcc_sensor->prev_j;
+		(IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+		xcc_sensor->prev_j;
 	if (offset < 0) {
 		xcc_sensor->overflows++;
 		xcc_sensor->curr_j = xcc_sensor->prev_j +
-		  ((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
-		   xcc_sensor->prev_j) + xcc_raw->j;
+			((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+			 xcc_sensor->prev_j) + xcc_raw->j;
 	} else {
 		xcc_sensor->curr_j = xcc_raw->j;
 	}
@@ -559,23 +552,20 @@ static int _thread_init(void)
 	static bool first_init = SLURM_FAILURE;
 	xcc_raw_single_data_t * xcc_raw;
 	
-	debug("FMOLL: I am %ld and first=%d and ipmi_ctx=%p and progrname is %s and xcc_sensor is %p",
-	      syscall(SYS_gettid), first, ipmi_ctx, slurm_prog_name, xcc_sensor);
-
 	if (!first) {
-	  /*
-	   * If we are here we are a new slurmd thread serving
-	   * a request. In that case we must init a new ipmi_ctx,
-	   * update the sensor and return because the freeipmi lib
-	   * context cannot be shared among threads.
-	   */
-	  if (_init_ipmi_config() != SLURM_SUCCESS)
-	    if (debug_flags & DEBUG_FLAG_ENERGY) {
-	      info("%s thread init error on _init_ipmi_config()",
-		   plugin_name);
-	      goto cleanup; 
-	    }
-	  return first_init;
+		/*
+		 * If we are here we are a new slurmd thread serving
+		 * a request. In that case we must init a new ipmi_ctx,
+		 * update the sensor and return because the freeipmi lib
+		 * context cannot be shared among threads.
+		 */
+		if (_init_ipmi_config() != SLURM_SUCCESS)
+			if (debug_flags & DEBUG_FLAG_ENERGY) {
+			     info("%s thread init error on _init_ipmi_config()",
+				  plugin_name);
+			     goto cleanup;
+			}
+		return first_init;
 	}
 	first = false;
 
@@ -592,22 +582,19 @@ static int _thread_init(void)
 		goto cleanup;
 	}
 
+	/* Let's fill the xcc_sensor with the first reading */
 	if (!xcc_sensor) {
-	  xcc_sensor = xmalloc(sizeof(sensor_status_t));
-	  memset(xcc_sensor, 0, sizeof(sensor_status_t));
-	  
-	  /* Let's fill the xcc_sensor with the first reading */
-	  xcc_sensor->poll_time = time(NULL);
-	  xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
-	  xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
-	  xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
-	  xcc_sensor->base_j = xcc_raw->j;
-	  xcc_sensor->curr_j = xcc_raw->j;
-	  xcc_sensor->prev_j = xcc_raw->j;
-	  xcc_sensor->low_j = 0;
-	  xcc_sensor->high_j = 0;
-	} else {
-	  debug3("There is a xcc_sensor already initialized, we are a child: %ld", syscall(SYS_gettid));
+		xcc_sensor = xmalloc(sizeof(sensor_status_t));
+		memset(xcc_sensor, 0, sizeof(sensor_status_t));
+		xcc_sensor->poll_time = time(NULL);
+		xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
+		xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
+		xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
+		xcc_sensor->base_j = xcc_raw->j;
+		xcc_sensor->curr_j = xcc_raw->j;
+		xcc_sensor->prev_j = xcc_raw->j;
+		xcc_sensor->low_j = 0;
+		xcc_sensor->high_j = 0;
 	}	 
 
 	if (debug_flags & DEBUG_FLAG_ENERGY)
@@ -663,8 +650,9 @@ static int _ipmi_send_profile(void)
 			xfree(dataset[i].name);
 
 		if (debug_flags & DEBUG_FLAG_ENERGY)
-			debug("Energy: XCC dataset created (id = %d)", dataset_id);
-		
+			debug("Energy: XCC dataset created (id = %d)",
+			      dataset_id);
+
 		if (dataset_id == SLURM_ERROR) {
 			error("Energy: Failed to create the dataset for XCC");
 			return SLURM_ERROR;
@@ -677,8 +665,8 @@ static int _ipmi_send_profile(void)
 	data[1] = xcc_sensor->high_j/xcc_sensor->high_elapsed_s;
 	data[2] = xcc_sensor->low_j/xcc_sensor->low_elapsed_s;
 	data[3] = (xcc_sensor->curr_j - xcc_sensor->base_j) /
-  	           (xcc_sensor->curr_read_time.tv_sec -
-		    xcc_sensor->first_read_time.tv_sec);	
+		(xcc_sensor->curr_read_time.tv_sec -
+		 xcc_sensor->first_read_time.tv_sec);
 	data[4] = _curr_watts();
 	if (debug_flags & DEBUG_FLAG_PROFILE) {
 		info("PROFILE-Energy: ConsumedEnergy=%"PRIu64"", data[0]);
@@ -805,11 +793,10 @@ static int _get_joules_task(uint16_t delta)
 	      "xcc_sensor is %p, progrname is %s", syscall(SYS_gettid),
 	      xcc_sensor, slurm_prog_name);
 
-        /* FIXME: 'delta' parameter
-	 * Means "use cache" if data is newer than delta seconds ago, otherwise
-	 * just query the sensor again
+        /*
+	 * 'delta' parameter means "use cache" if data is newer than delta
+	 * seconds ago, otherwise just inquiry ipmi again.
 	 */
-
 	if (slurm_get_node_energy(NULL, delta, &sensor_cnt, &energy)) {
 		error("_get_joules_task: can't get info from slurmd");
 		return SLURM_ERROR;
@@ -852,8 +839,8 @@ static int _get_joules_task(uint16_t delta)
 		xcc_sensor->high_elapsed_s = 0;
 	} else {
 	        /*
-		 * Update this task's local sensor with the latest cached energy reading
-		 * from the global sensor.
+		 * Update this task's local sensor with the latest cached
+		 * energy reading from the global sensor.
 		 */
 		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->prev_j = xcc_sensor->curr_j;
@@ -862,15 +849,15 @@ static int _get_joules_task(uint16_t delta)
 
 		/* Detect an overflow - slurmd may be restarted */
 		offset =  energy->consumed_energy +
-	          (IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
-                  xcc_sensor->prev_j;
+			(IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+			xcc_sensor->prev_j;
 		if (offset < 0) {
-		  xcc_sensor->overflows++;
-		  xcc_sensor->curr_j = xcc_sensor->prev_j +
-		    ((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
-		     xcc_sensor->prev_j) + energy->consumed_energy;
+			xcc_sensor->overflows++;
+			xcc_sensor->curr_j = xcc_sensor->prev_j +
+				((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+				 xcc_sensor->prev_j) + energy->consumed_energy;
 		} else {
-		  xcc_sensor->curr_j = energy->consumed_energy;
+			xcc_sensor->curr_j = energy->consumed_energy;
 		}
 
 		/* Tally the interval with highest/lowest consumption */
@@ -908,7 +895,7 @@ static int _get_joules_task(uint16_t delta)
  * _xcc_to_energy() translates the xcc_sensor data to an energy struct.
  * 
  * FIXME: In the future, the energy struct may be extended to include
- * all the fields we have here, like [Max|Min|Avg]Power.
+ * the already calculated fields from xcc_sensor.
  */
 static void _xcc_to_energy(acct_gather_energy_t *energy)
 {
@@ -921,7 +908,7 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
 		energy->base_watts = 0;
 	else
 		energy->base_watts = xcc_sensor->low_j /
-				     xcc_sensor->low_elapsed_s;
+			xcc_sensor->low_elapsed_s;
 
 	energy->previous_consumed_energy = xcc_sensor->prev_j;
 	energy->consumed_energy = (xcc_sensor->curr_j - xcc_sensor->base_j);
@@ -992,38 +979,35 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 
 	xassert(_run_in_daemon());
 
-	debug("FMOLL: heyheyhey my name is %s tid %ld", slurm_prog_name, syscall(SYS_gettid));
 	switch (data_type) {
 	case ENERGY_DATA_NODE_ENERGY:
-	  /*
-	   * We must return the xcc_sensor reading. Usually this
-	   * case will be issued only for slurmd and not for a task.
-	   */
-	  debug("CALLED ENERGY_DATA_NODE_ENERGY in %s", __func__);
-	  slurm_mutex_lock(&ipmi_mutex);
-	  if (!energy)
+		/*
+		 * We must return the xcc_sensor reading. Usually this
+		 * case will be issued only for slurmd and not for a task.
+		 */
+		slurm_mutex_lock(&ipmi_mutex);
+		if (!energy)
 			energy = xmalloc(sizeof(acct_gather_energy_t));
 		_xcc_to_energy(energy);
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_JOULES_TASK:
-	  /*
-	   * Here we are asked to return a new reading, so if we are the
-	   * slurmd thread we should just run a ipmi call and return the energy.
-	   *
-	   * If we are a task, we call to _get_joules_task to inquiry
-	   * slurmd for a the reading.
-	   */
-	  debug("CALLED ENERGY_DATA_JOULES_TASK in %s", __func__);
+		/*
+		 * Here we are asked to return a new reading, so if we are the
+		 * slurmd thread we should just run a ipmi call and return the
+		 * energy.
+		 * If we are a task, we call to _get_joules_task to inquiry
+		 * slurmd for a the reading.
+		 */
 		slurm_mutex_lock(&ipmi_mutex);
 		if (_is_thread_launcher()) {
 			if (_thread_init() == SLURM_SUCCESS)
 				_thread_update_node_energy();
 		} else {
-		  /* 
-		   * If more than 60 seconds elapsed since last timestamp,
-		   * ask for new reading.
-		   */
+			/*
+			 * If more than 10 seconds elapsed since last
+			 * timestamp ask for new reading.
+			 */
 		        _get_joules_task(10);
 		}
 		if (!energy)
@@ -1032,11 +1016,10 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_STRUCT:
-	  /*
-	   * Return the xcc_sensor, be it from slurmd with global
-	   * node data, or be it from slurmstepd.
-	   */
-	  debug("CALLED ENERGY_DATA_STRUCT in %s", __func__);
+		/*
+		 * Return the xcc_sensor, be it from slurmd with global
+		 * node data, or be it from slurmstepd.
+		 */
 		slurm_mutex_lock(&ipmi_mutex);
 		if (!energy)
 			energy = xmalloc(sizeof(acct_gather_energy_t));
@@ -1044,14 +1027,13 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_NODE_ENERGY_UP:
-	  /*
-	   * This case requests an update of the the sensor cache, so we
-	   * must run the ipmi call or inquiry slurmd for fresh data.
-	   * Usually called per node.
-	   * If we are a task, force a sensor reading only if more than
-	   * 10 seconds elapsed since last poll.
-	   */
-	  debug("CALLED ENERGY_DATA_NODE_ENERGY_UP in %s", __func__);
+		/*
+		 * This case requests an update of the the sensor cache, so we
+		 * must run the ipmi call or inquiry slurmd for fresh data.
+		 * Usually called per node.
+		 * If we are a task, force a sensor reading only if more than
+		 * 10 seconds elapsed since last poll.
+		 */
 		slurm_mutex_lock(&ipmi_mutex);
 		if (_is_thread_launcher()) {
 			if (_thread_init() == SLURM_SUCCESS)
@@ -1063,8 +1045,7 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_LAST_POLL:
-	  /* Last timestamp we gathered sensor data */
-	  debug("CALLED ENERGY_DATA_LAST_POLL in %s", __func__);
+		/* Last timestamp we gathered sensor data */
 		slurm_mutex_lock(&ipmi_mutex);
 		if (xcc_sensor)
 			*last_poll = xcc_sensor->poll_time;
@@ -1073,7 +1054,6 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_SENSOR_CNT:
-	  debug("CALLED ENERGY_DATA_SENSOR_CNT in %s", __func__);
 		*sensor_cnt = 1;
 		break;
 	default:
@@ -1186,7 +1166,7 @@ extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 			       "EnergyIPMIWorkaroundFlags", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.ipmi_flags,
 			       "EnergyIPMIFlags", tbl);
-}
+	}
 
 	if (!_run_in_daemon())
 		return;
@@ -1313,4 +1293,3 @@ extern void acct_gather_energy_p_conf_values(List *data)
 	
 	return;
 }
-
