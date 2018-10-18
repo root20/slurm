@@ -75,9 +75,10 @@ typedef struct xcc_raw_single_data {
 
 /* Status of the xcc sensor in this thread */
 typedef struct sensor_status {
-	struct timeval first_read_time; /* First read time in this thread */
+	struct timeval first_read_time; /* First time in this thread */
 	struct timeval prev_read_time;  /* Previous read time */
-	struct timeval curr_read_time;  /* Current read time */
+	struct timeval curr_read_time;  /* Current read timestamp by BMC */
+	time_t poll_time;  /* Time when we gathered this sensor */
 	uint32_t base_j; /* Initial energy sensor value (in joules) */ 
 	uint64_t curr_j; /* Consumed joules in the last reading */
 	uint64_t prev_j; /* Consumed joules in the previous reading */
@@ -124,6 +125,7 @@ static void _print_xcc_sensor()
 	     "first_read_time=%ld\n"
 	     "prev_read_time=%ld\n"
 	     "curr_read_time=%ld\n"
+	     "polltime=%ld\n"
 	     "base_j=%d\n"
 	     "curr_j=%"PRIu64"\n"
 	     "prev_j=%"PRIu64"\n"
@@ -135,6 +137,7 @@ static void _print_xcc_sensor()
 	     xcc_sensor->first_read_time.tv_sec,
 	     xcc_sensor->prev_read_time.tv_sec,
 	     xcc_sensor->curr_read_time.tv_sec,
+	     xcc_sensor->poll_time,
 	     xcc_sensor->base_j,
 	     xcc_sensor->curr_j,
 	     xcc_sensor->prev_j,
@@ -436,14 +439,16 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 /* FIXME: Convert this function to a MACRO */
 static uint32_t _elapsed_last_interval_s()
 {
-	return  (xcc_sensor->curr_read_time.tv_sec
-		 - xcc_sensor->prev_read_time.tv_sec);
+        uint32_t elapsed = xcc_sensor->curr_read_time.tv_sec -
+	                   xcc_sensor->prev_read_time.tv_sec;
+	return (elapsed < 0) ? 0 : elapsed;
 }
 
 /* FIXME: Convert this function to a MACRO */
 static uint32_t _consumed_last_interval_j()
 {
-	return xcc_sensor->curr_j - xcc_sensor->prev_j;
+        uint32_t consumed =  xcc_sensor->curr_j - xcc_sensor->prev_j;
+	return (consumed < 0) ? 0 : consumed;
 }
 
 /* 
@@ -476,25 +481,29 @@ static uint32_t _curr_watts()
 static int _thread_update_node_energy(void)
 {
 	xcc_raw_single_data_t * xcc_raw;
+	uint32_t offset;
 
 	xcc_raw = _read_ipmi_values();
-	
+
 	if (!xcc_raw) {
 		error("%s could not read XCC ipmi values", __func__);
 		return SLURM_FAILURE;
 	}
 
+	xcc_sensor->poll_time = time(NULL);
 	xcc_sensor->prev_read_time.tv_sec = xcc_sensor->curr_read_time.tv_sec;
 	xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
 	xcc_sensor->prev_j = xcc_sensor->curr_j;
 
 	/* Detect an overflow */
-	uint32_t delta =  xcc_raw->j - xcc_sensor->prev_j;
-	if (delta < 0) {
+	offset =  xcc_raw->j +
+	          (IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+                  xcc_sensor->prev_j;
+	if (offset < 0) {
 		xcc_sensor->overflows++;
 		xcc_sensor->curr_j = xcc_sensor->prev_j +
-			(IPMI_XCC_OVERFLOW - xcc_sensor->prev_j) +
-			xcc_raw->j;
+		  ((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+		   xcc_sensor->prev_j) + xcc_raw->j;
 	} else {
 		xcc_sensor->curr_j = xcc_raw->j;
 	}
@@ -581,6 +590,7 @@ static int _thread_init(void)
 	  memset(xcc_sensor, 0, sizeof(sensor_status_t));
 	  
 	  /* Let's fill the xcc_sensor with the first reading */
+	  xcc_sensor->poll_time = time(NULL);
 	  xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
 	  xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
 	  xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
@@ -779,7 +789,8 @@ static void *_thread_launcher(void *no_data)
 static int _get_joules_task(uint16_t delta)
 {
 	acct_gather_energy_t *energy = NULL;
-	uint16_t sensor_cnt = 0;       
+	uint16_t sensor_cnt = 0;
+	uint32_t offset;
 
 	debug("FMOLL: I am in get_joules_task, tid %ld "
 	      "xcc_sensor is %p, progrname is %s", syscall(SYS_gettid),
@@ -817,6 +828,7 @@ static int _get_joules_task(uint16_t delta)
 		 * consumption out of the mix setting the base_j and
 		 * first poll time to the current value.
 		 */
+		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->base_j = energy->consumed_energy;
 		xcc_sensor->first_read_time.tv_sec = energy->poll_time;
 
@@ -834,10 +846,23 @@ static int _get_joules_task(uint16_t delta)
 		 * Update this task's local sensor with the latest cached energy reading
 		 * from the global sensor.
 		 */
+		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->prev_j = xcc_sensor->curr_j;
 		xcc_sensor->prev_read_time = xcc_sensor->curr_read_time;
  		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
-		xcc_sensor->curr_j = energy->consumed_energy;
+
+		/* Detect an overflow - slurmd may be restarted */
+		offset =  energy->consumed_energy +
+	          (IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+                  xcc_sensor->prev_j;
+		if (offset < 0) {
+		  xcc_sensor->overflows++;
+		  xcc_sensor->curr_j = xcc_sensor->prev_j +
+		    ((IPMI_XCC_OVERFLOW * xcc_sensor->overflows) -
+		     xcc_sensor->prev_j) + energy->consumed_energy;
+		} else {
+		  xcc_sensor->curr_j = energy->consumed_energy;
+		}
 
 		/* Tally the interval with highest/lowest consumption */
 		uint32_t c_mj = _consumed_last_interval_j();
@@ -950,6 +975,8 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 					 void *data)
 {
 	int rc = SLURM_SUCCESS;
+
+	/* This buffer can be one of these types */
 	acct_gather_energy_t *energy = (acct_gather_energy_t *)data;
 	time_t *last_poll = (time_t *)data;
 	uint16_t *sensor_cnt = (uint16_t *)data;
@@ -988,7 +1015,7 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 		   * If more than 60 seconds elapsed since last timestamp,
 		   * ask for new reading.
 		   */
-		        _get_joules_task(60);
+		        _get_joules_task(10);
 		}
 		if (!energy)
 			energy = xmalloc(sizeof(acct_gather_energy_t));
@@ -1021,17 +1048,17 @@ extern int acct_gather_energy_p_get_data(enum acct_energy_type data_type,
 			if (_thread_init() == SLURM_SUCCESS)
 				_thread_update_node_energy();
 		} else {
-			_get_joules_task(60);
+			_get_joules_task(10);
 		}
 		_xcc_to_energy(energy);
 		slurm_mutex_unlock(&ipmi_mutex);
 		break;
 	case ENERGY_DATA_LAST_POLL:
-	  /* Last metric timestamp we have for this node or task */
+	  /* Last timestamp we gathered sensor data */
 	  debug("CALLED ENERGY_DATA_LAST_POLL in %s", __func__);
 		slurm_mutex_lock(&ipmi_mutex);
 		if (xcc_sensor)
-			*last_poll = xcc_sensor->curr_read_time.tv_sec;
+			*last_poll = xcc_sensor->poll_time;
 		else
 			*last_poll = 0;
 		slurm_mutex_unlock(&ipmi_mutex);
