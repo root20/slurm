@@ -883,11 +883,11 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
 		energy->base_watts = xcc_sensor->low_j /
 			xcc_sensor->low_elapsed_s;
 
-	energy->previous_consumed_energy = xcc_sensor->prev_j;
-	energy->consumed_energy = (xcc_sensor->curr_j - xcc_sensor->base_j);
-	energy->base_consumed_energy = xcc_sensor->low_j;
-	energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
-	energy->current_watts = _curr_watts();
+       energy->previous_consumed_energy = xcc_sensor->prev_j;
+       energy->consumed_energy = xcc_sensor->curr_j;
+       energy->base_consumed_energy = xcc_sensor->base_j;
+       energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
+       energy->current_watts = _curr_watts();
 }
 
 /*
