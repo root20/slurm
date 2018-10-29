@@ -123,18 +123,18 @@ static void _print_xcc_sensor()
 		return;
 	}
 	info("xcc_sensor:\n"
-	     "first_read_time=%ld\n"
-	     "prev_read_time=%ld\n"
-	     "curr_read_time=%ld\n"
-	     "polltime=%ld\n"
-	     "base_j=%d\n"
+	     "first_read_time=%lu\n"
+	     "prev_read_time=%lu\n"
+	     "curr_read_time=%lu\n"
+	     "polltime=%lu\n"
+	     "base_j=%"PRIu32"\n"
 	     "curr_j=%"PRIu64"\n"
 	     "prev_j=%"PRIu64"\n"
-	     "low_j=%d\n"
-	     "high_j=%d\n"
-	     "low_elapsed_s=%d\n"
-	     "high_elapsed_s=%d\n"
-	     "overflows=%d\n",
+	     "low_j=%"PRIu32"\n"
+	     "high_j=%"PRIu32"\n"
+	     "low_elapsed_s=%u\n"
+	     "high_elapsed_s=%u\n"
+	     "overflows=%u\n",
 	     xcc_sensor->first_read_time.tv_sec,
 	     xcc_sensor->prev_read_time.tv_sec,
 	     xcc_sensor->curr_read_time.tv_sec,
@@ -416,16 +416,16 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 /* FIXME: Convert this function to a MACRO */
 static uint32_t _elapsed_last_interval_s()
 {
-        uint32_t elapsed = xcc_sensor->curr_read_time.tv_sec -
+        int elapsed = xcc_sensor->curr_read_time.tv_sec -
 		xcc_sensor->prev_read_time.tv_sec;
-	return (elapsed < 0) ? 0 : elapsed;
+	return (elapsed < 0) ? 0 : (uint32_t) elapsed;
 }
 
 /* FIXME: Convert this function to a MACRO */
 static uint32_t _consumed_last_interval_j()
 {
-        uint32_t consumed =  xcc_sensor->curr_j - xcc_sensor->prev_j;
-	return (consumed < 0) ? 0 : consumed;
+        int consumed =  xcc_sensor->curr_j - xcc_sensor->prev_j;
+	return (consumed < 0) ? 0 : (uint32_t) consumed;
 }
 
 /*
@@ -438,7 +438,7 @@ static uint32_t _curr_watts()
 
 	seconds =_elapsed_last_interval_s();
 	joules = _consumed_last_interval_j();
-	if (joules <= 0 || seconds <= 0)
+	if (joules == 0 || seconds == 0)
 		return 0;
 
 	return (uint32_t) round((double) joules/seconds);
