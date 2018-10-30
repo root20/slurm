@@ -452,7 +452,7 @@ static uint32_t _curr_watts()
 static int _thread_update_node_energy(void)
 {
 	xcc_raw_single_data_t * xcc_raw;
-	uint32_t offset;
+	int offset;
 	uint32_t now, c_j, e_s;
 
 	now = time(NULL);
@@ -765,7 +765,7 @@ static int _get_joules_task(uint16_t delta)
 {
 	acct_gather_energy_t *energy = NULL;
 	uint16_t sensor_cnt = 0;
-	uint32_t offset;
+	int offset;
 
         /*
 	 * 'delta' parameter means "use cache" if data is newer than delta
