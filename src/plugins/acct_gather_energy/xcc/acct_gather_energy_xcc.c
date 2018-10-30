@@ -53,10 +53,10 @@ slurmd_conf_t *conf = NULL;
 
 #define _DEBUG 1
 #define _DEBUG_ENERGY 1
-#define IPMI_VERSION 2		/* Data structure version number */
-#define MAX_LOG_ERRORS 5	/* Max sensor reading errors log messages */
-#define XCC_MIN_RES 50         /* Minimum resolution for XCC readings, in ms */
-#define IPMI_RAW_MAX_ARGS (65536*2) /* Max ipmi response length*/
+#define IPMI_VERSION 2	      /* Data structure version number */
+#define MAX_LOG_ERRORS 5      /* Max sensor reading errors log messages */
+#define XCC_MIN_RES 50        /* Minimum resolution for XCC readings, in ms */
+#define IPMI_RAW_MAX_ARGS 256 /* Max XCC response length in bytes*/
 /*FIXME: Investigate which is the OVERFLOW limit for XCC*/
 #define IPMI_XCC_OVERFLOW INFINITE /* XCC overflows at X */
 
@@ -376,7 +376,7 @@ cleanup:
 static xcc_raw_single_data_t * _read_ipmi_values(void)
 {
 	xcc_raw_single_data_t * xcc_reading;
-	uint8_t *buf_rs;
+	uint8_t buf_rs[IPMI_RAW_MAX_ARGS];
 	int i;
 	int rs_len = 0;
 
@@ -385,13 +385,12 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 		return 0;
 	}
 
-        buf_rs = xmalloc(IPMI_RAW_MAX_ARGS * sizeof (uint8_t));
         rs_len = ipmi_cmd_raw(ipmi_ctx,
                               cmd_rq[0], //Lun (logical unit number)
                               cmd_rq[1], //Net Function
                               &cmd_rq[2], //Command number + request data
                               cmd_rq_len - 2, //Length (in bytes)
-                              buf_rs, //response buffer
+                              &buf_rs, //response buffer
                               IPMI_RAW_MAX_ARGS //max response length
                 );
 
@@ -399,7 +398,6 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 
         if (rs_len < 0) {
 		error("Invalid ipmi response length");
-                xfree(buf_rs);
 		return 0;
 	}
 
@@ -410,7 +408,6 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
         memcpy(&xcc_reading->mj, buf_rs+8, 2);
         memcpy(&xcc_reading->s, buf_rs+10, 4);
         memcpy(&xcc_reading->ms, buf_rs+14, 2);
-	xfree(buf_rs);
 	return xcc_reading;
 }
 
