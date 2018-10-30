@@ -562,7 +562,6 @@ static int _thread_init(void)
 	/* Let's fill the xcc_sensor with the first reading */
 	if (!xcc_sensor) {
 		xcc_sensor = xmalloc(sizeof(sensor_status_t));
-		memset(xcc_sensor, 0, sizeof(sensor_status_t));
 		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
 		xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
@@ -790,7 +789,6 @@ static int _get_joules_task(uint16_t delta)
 	 */
 	if (!xcc_sensor) {
 		xcc_sensor = xmalloc(sizeof(sensor_status_t));
-		memset(xcc_sensor, 0, sizeof(sensor_status_t));
 
 		/*
 		 * Record data for the step, so take all the previous
