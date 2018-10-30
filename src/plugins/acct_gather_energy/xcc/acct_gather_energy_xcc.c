@@ -75,10 +75,11 @@ typedef struct xcc_raw_single_data {
 
 /* Status of the xcc sensor in this thread */
 typedef struct sensor_status {
-	struct timeval first_read_time; /* First time in this thread */
-	struct timeval prev_read_time;  /* Previous read time */
-	struct timeval curr_read_time;  /* Current read timestamp by BMC */
-	time_t poll_time;  /* Time when we gathered this sensor */
+	/* Timestamp is when the BMC measured it, not when we grab it */
+	struct timeval first_reading_tstamp; /* First reading timestamp */
+	struct timeval prev_reading_tstamp;  /* Previous reading timestamp */
+	struct timeval curr_reading_tstamp;  /* Current reading timestamp */
+	time_t poll_time;  /* Time when we grabbed the last BMC reading */
 	uint32_t base_j; /* Initial energy sensor value (in joules) */
 	uint64_t curr_j; /* Consumed joules in the last reading */
 	uint64_t prev_j; /* Consumed joules in the previous reading */
@@ -123,9 +124,9 @@ static void _print_xcc_sensor()
 		return;
 	}
 	info("xcc_sensor:\n"
-	     "first_read_time=%lu\n"
-	     "prev_read_time=%lu\n"
-	     "curr_read_time=%lu\n"
+	     "first_reading_tstamp=%lu\n"
+	     "prev_reading_tstamp=%lu\n"
+	     "curr_reading_tstamp=%lu\n"
 	     "polltime=%lu\n"
 	     "base_j=%"PRIu32"\n"
 	     "curr_j=%"PRIu64"\n"
@@ -135,9 +136,9 @@ static void _print_xcc_sensor()
 	     "low_elapsed_s=%u\n"
 	     "high_elapsed_s=%u\n"
 	     "overflows=%u\n",
-	     xcc_sensor->first_read_time.tv_sec,
-	     xcc_sensor->prev_read_time.tv_sec,
-	     xcc_sensor->curr_read_time.tv_sec,
+	     xcc_sensor->first_reading_tstamp.tv_sec,
+	     xcc_sensor->prev_reading_tstamp.tv_sec,
+	     xcc_sensor->curr_reading_tstamp.tv_sec,
 	     xcc_sensor->poll_time,
 	     xcc_sensor->base_j,
 	     xcc_sensor->curr_j,
@@ -349,10 +350,10 @@ static int _init_ipmi_config (void)
 	    || slurm_ipmi_conf.target_slave_address_is_set)
 	{
 		if (ipmi_ctx_set_target(ipmi_ctx,
-					slurm_ipmi_conf.target_channel_number_is_set ?
-					&slurm_ipmi_conf.target_channel_number : NULL,
-					slurm_ipmi_conf.target_slave_address_is_set ?
-					&slurm_ipmi_conf.target_slave_address : NULL) < 0)
+			     slurm_ipmi_conf.target_channel_number_is_set ?
+			     &slurm_ipmi_conf.target_channel_number : NULL,
+			     slurm_ipmi_conf.target_slave_address_is_set ?
+			     &slurm_ipmi_conf.target_slave_address : NULL) < 0)
 		{
 			error ("%s: error on ipmi_ctx_set_target: %s",
 			       __func__, ipmi_ctx_errormsg (ipmi_ctx));
@@ -416,8 +417,8 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 /* FIXME: Convert this function to a MACRO */
 static uint32_t _elapsed_last_interval_s()
 {
-        int elapsed = xcc_sensor->curr_read_time.tv_sec -
-		xcc_sensor->prev_read_time.tv_sec;
+        int elapsed = xcc_sensor->curr_reading_tstamp.tv_sec -
+		xcc_sensor->prev_reading_tstamp.tv_sec;
 	return (elapsed < 0) ? 0 : (uint32_t) elapsed;
 }
 
@@ -462,8 +463,9 @@ static int _thread_update_node_energy(void)
 		return SLURM_FAILURE;
 	}
 
-	xcc_sensor->prev_read_time.tv_sec = xcc_sensor->curr_read_time.tv_sec;
-	xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
+	xcc_sensor->prev_reading_tstamp.tv_sec =
+		xcc_sensor->curr_reading_tstamp.tv_sec;
+	xcc_sensor->curr_reading_tstamp.tv_sec = xcc_raw->s;
 	xcc_sensor->prev_j = xcc_sensor->curr_j;
 
 	/* Detect an overflow */
@@ -511,7 +513,7 @@ static int _thread_update_node_energy(void)
 		     _curr_watts(),
 		     _consumed_last_interval_j(),
 		     _elapsed_last_interval_s(),
-		     xcc_sensor->first_read_time.tv_sec,
+		     xcc_sensor->first_reading_tstamp.tv_sec,
 		     xcc_sensor->base_j);
 	}
 
@@ -563,9 +565,9 @@ static int _thread_init(void)
 	if (!xcc_sensor) {
 		xcc_sensor = xmalloc(sizeof(sensor_status_t));
 		xcc_sensor->poll_time = time(NULL);
-		xcc_sensor->first_read_time.tv_sec = xcc_raw->s;
-		xcc_sensor->prev_read_time.tv_sec = xcc_raw->s;
-		xcc_sensor->curr_read_time.tv_sec = xcc_raw->s;
+		xcc_sensor->first_reading_tstamp.tv_sec = xcc_raw->s;
+		xcc_sensor->prev_reading_tstamp.tv_sec = xcc_raw->s;
+		xcc_sensor->curr_reading_tstamp.tv_sec = xcc_raw->s;
 		xcc_sensor->base_j = xcc_raw->j;
 		xcc_sensor->curr_j = xcc_raw->j;
 		xcc_sensor->prev_j = xcc_raw->j;
@@ -641,8 +643,8 @@ static int _ipmi_send_profile(void)
 	data[1] = xcc_sensor->high_j/xcc_sensor->high_elapsed_s;
 	data[2] = xcc_sensor->low_j/xcc_sensor->low_elapsed_s;
 	data[3] = (xcc_sensor->curr_j - xcc_sensor->base_j) /
-		(xcc_sensor->curr_read_time.tv_sec -
-		 xcc_sensor->first_read_time.tv_sec);
+		(xcc_sensor->curr_reading_tstamp.tv_sec -
+		 xcc_sensor->first_reading_tstamp.tv_sec);
 	data[4] = _curr_watts();
 	if (debug_flags & DEBUG_FLAG_PROFILE) {
 		info("PROFILE-Energy: ConsumedEnergy=%"PRIu64"", data[0]);
@@ -653,8 +655,8 @@ static int _ipmi_send_profile(void)
 	}
 
 	return acct_gather_profile_g_add_sample_data(dataset_id, (void *)data,
-						     (time_t)xcc_sensor->
-						     curr_read_time.tv_sec);
+						   (time_t)xcc_sensor->
+						   curr_reading_tstamp.tv_sec);
 }
 
 
@@ -797,10 +799,10 @@ static int _get_joules_task(uint16_t delta)
 		 */
 		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->base_j = energy->consumed_energy;
-		xcc_sensor->first_read_time.tv_sec = energy->poll_time;
+		xcc_sensor->first_reading_tstamp.tv_sec = energy->poll_time;
 
-		xcc_sensor->prev_read_time.tv_sec = energy->poll_time;
-		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
+		xcc_sensor->prev_reading_tstamp.tv_sec = energy->poll_time;
+		xcc_sensor->curr_reading_tstamp.tv_sec = energy->poll_time;
 		xcc_sensor->curr_j = xcc_sensor->base_j;
 		xcc_sensor->prev_j = xcc_sensor->base_j;
 
@@ -815,8 +817,9 @@ static int _get_joules_task(uint16_t delta)
 		 */
 		xcc_sensor->poll_time = time(NULL);
 		xcc_sensor->prev_j = xcc_sensor->curr_j;
-		xcc_sensor->prev_read_time = xcc_sensor->curr_read_time;
- 		xcc_sensor->curr_read_time.tv_sec = energy->poll_time;
+		xcc_sensor->prev_reading_tstamp =
+			xcc_sensor->curr_reading_tstamp;
+		xcc_sensor->curr_reading_tstamp.tv_sec = energy->poll_time;
 
 		/* Detect an overflow - slurmd may be restarted */
 		offset =  energy->consumed_energy +
@@ -855,7 +858,7 @@ static int _get_joules_task(uint16_t delta)
 		     _curr_watts(),
 		     _consumed_last_interval_j(),
 		     _elapsed_last_interval_s(),
-		     xcc_sensor->first_read_time.tv_sec,
+		     xcc_sensor->first_reading_tstamp.tv_sec,
 		     xcc_sensor->base_j);
 	}
 
@@ -884,7 +887,7 @@ static void _xcc_to_energy(acct_gather_energy_t *energy)
        energy->previous_consumed_energy = xcc_sensor->prev_j;
        energy->consumed_energy = xcc_sensor->curr_j;
        energy->base_consumed_energy = xcc_sensor->base_j;
-       energy->poll_time = xcc_sensor->curr_read_time.tv_sec;
+       energy->poll_time = xcc_sensor->curr_reading_tstamp.tv_sec;
        energy->current_watts = _curr_watts();
 }
 
