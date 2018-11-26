@@ -240,7 +240,12 @@ _dump_node_state (struct node_record *dump_node_ptr, Buf buffer)
 	pack32  (dump_node_ptr->tmp_disk, buffer);
 	pack32  (dump_node_ptr->reason_uid, buffer);
 	pack_time(dump_node_ptr->reason_time, buffer);
-	pack_time(dump_node_ptr->boot_req_time, buffer);
+	if(IS_NODE_REBOOT(dump_node_ptr) &&
+	   dump_node_ptr->boot_req_time == 0) {
+		time_t now = time(NULL);
+		pack_time(now, buffer);
+	} else
+		pack_time(dump_node_ptr->boot_req_time, buffer);
 	pack16  (dump_node_ptr->protocol_version, buffer);
 	packstr (dump_node_ptr->mcs_label, buffer);
 	(void) gres_plugin_node_state_pack(dump_node_ptr->gres_list, buffer,
