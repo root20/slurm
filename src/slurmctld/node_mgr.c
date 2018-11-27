@@ -633,7 +633,7 @@ extern int load_all_node_state ( bool state_only )
 							node_name);
 			}
 
-			if (node_ptr->node_state & NODE_STATE_POWER_UP) {
+			if (IS_NODE_POWER_UP(node_ptr) || IS_NODE_REBOOT(node_ptr)) {
 				/* last_response value not saved,
 				 * make best guess */
 				node_ptr->last_response = now +
@@ -2404,7 +2404,7 @@ extern int validate_node_specs(slurm_node_registration_status_msg_t *reg_msg,
 	node_ptr->version = reg_msg->version;
 	reg_msg->version = NULL;
 
-	if (IS_NODE_POWER_UP(node_ptr) &&
+	if ((IS_NODE_POWER_UP(node_ptr) || IS_NODE_REBOOT(node_ptr)) &&
 	    (node_ptr->boot_time < node_ptr->boot_req_time)) {
 		debug("Still waiting for boot of node %s", node_ptr->name);
 		return SLURM_SUCCESS;
@@ -3331,6 +3331,7 @@ static void _node_did_resp(struct node_record *node_ptr)
 
 	node_inx = node_ptr - node_record_table_ptr;
 	if (IS_NODE_POWER_UP(node_ptr) ||
+	    IS_NODE_REBOOT(node_ptr) ||
 	    (IS_NODE_DOWN(node_ptr) &&
 	    (node_ptr->boot_req_time != 0))) {
 		if (node_ptr->boot_time < node_ptr->boot_req_time) {
