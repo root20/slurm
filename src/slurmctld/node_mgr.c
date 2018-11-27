@@ -3549,8 +3549,9 @@ void set_node_down_ptr (struct node_record *node_ptr, char *reason)
 {
 	time_t now = time(NULL);
 
-	if ((node_ptr->reason == NULL) ||
-	    (xstrncmp(node_ptr->reason, "Not responding", 14) == 0)) {
+	if (reason &&
+	    ((node_ptr->reason == NULL) ||
+	     (xstrncmp(node_ptr->reason, "Not responding", 14) == 0))) {
 		xfree(node_ptr->reason);
 		node_ptr->reason = xstrdup(reason);
 		node_ptr->reason_time = now;

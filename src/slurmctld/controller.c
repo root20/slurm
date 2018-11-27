@@ -1863,6 +1863,42 @@ static void _queue_reboot_msg(void)
 	}
 }
 
+static void _check_nodes()
+{
+	int i;
+	struct node_record *node_ptr;
+	time_t now = time(NULL);
+	uint16_t resume_timeout = slurmctld_conf.resume_timeout;
+
+	for (i = 0; i < node_record_count; i++) {
+		node_ptr = &node_record_table_ptr[i];
+
+		if (IS_NODE_REBOOT(node_ptr) &&
+		    node_ptr->boot_req_time &&
+		    (node_ptr->boot_req_time + resume_timeout < now)) {
+			char *timeout_msg = "reboot timed out";
+
+			set_node_down_ptr(node_ptr, NULL);
+			node_ptr->node_state &= (~NODE_STATE_REBOOT);
+
+			if ((node_ptr->next_state != NO_VAL) &&
+			    (node_ptr->reason)) {
+				xstrfmtcat(node_ptr->reason, " : %s",
+					   timeout_msg);
+				node_ptr->reason_time = now;
+			} else {
+				xfree(node_ptr->reason);
+				node_ptr->reason = xstrdup(timeout_msg);
+				node_ptr->reason_time = now;
+				node_ptr->reason_uid =
+					slurmctld_conf.slurm_user_id;
+			}
+
+			bit_clear(rs_node_bitmap, i);
+		}
+	}
+}
+
 /*
  * _slurmctld_background - process slurmctld background activities
  *	purge defunct job records, save state, schedule jobs, and
@@ -2038,6 +2074,7 @@ static void *_slurmctld_background(void *no_data)
 			job_time_limit();
 			job_resv_check();
 			step_checkpoint();
+			_check_nodes();
 			unlock_slurmctld(job_write_lock);
 		}
 
