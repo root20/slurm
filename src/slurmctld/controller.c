@@ -2074,8 +2074,11 @@ static void *_slurmctld_background(void *no_data)
 			job_time_limit();
 			job_resv_check();
 			step_checkpoint();
-			_check_nodes();
 			unlock_slurmctld(job_write_lock);
+
+			lock_slurmctld(node_write_lock);
+			_check_nodes();
+			unlock_slurmctld(node_write_lock);
 		}
 
 		if (slurmctld_conf.health_check_interval &&
