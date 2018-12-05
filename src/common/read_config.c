@@ -3496,7 +3496,6 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 	uint64_t def_cpu_per_gpu = 0, def_mem_per_gpu = 0, tot_prio_weight;
 	job_defaults_t *job_defaults;
 	int i;
-	char *tok, *save_ptr = NULL;
 
 	if (!s_p_get_uint16(&conf->batch_start_timeout, "BatchStartTimeout",
 			    hashtbl))
@@ -3737,7 +3736,9 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 			     "JobAcctGatherParams", hashtbl);
 
 	if (conf->job_acct_gather_params) {
-		tok = strtok_r(conf->job_acct_gather_params, ",", &save_ptr);
+		char *save_ptr = NULL;
+		char *tmp = xstrdup(conf->job_acct_gather_params);
+		char *tok = strtok_r(tmp, ",", &save_ptr);
 		while(tok) {
 			if (xstrcasecmp(tok, "OverMemoryKill") == 0) {
 				conf->jobacct_oom_kill = true;
@@ -3745,6 +3746,7 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 			}
 			tok = strtok_r(NULL, ",", &save_ptr);
 		}
+		xfree(tmp);
 	}
 
 	if (!s_p_get_string(&conf->job_ckpt_dir, "JobCheckpointDir", hashtbl))
