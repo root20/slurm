@@ -2730,7 +2730,7 @@ typedef struct slurm_ctl_conf {
 	uint16_t max_tasks_per_node; /* maximum tasks per node */
 	char *mcs_plugin; /* mcs plugin type */
 	char *mcs_plugin_params; /* mcs plugin parameters */
-	uint16_t mem_limit_enforce; /* Enforce mem limit at runtime y|n */
+	uint16_t jobacct_oom_kill; /* Enforce mem limit at runtime y|n */
 	uint32_t min_job_age;	/* COMPLETED jobs over this age (secs)
 				 * purged from in memory records */
 	char *mpi_default;	/* Default version of MPI in use */

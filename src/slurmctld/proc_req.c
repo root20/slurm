@@ -784,6 +784,7 @@ static void _fill_ctld_conf(slurm_ctl_conf_t * conf_ptr)
 	conf_ptr->job_file_append     = conf->job_file_append;
 	conf_ptr->job_requeue         = conf->job_requeue;
 	conf_ptr->job_submit_plugins  = xstrdup(conf->job_submit_plugins);
+	conf_ptr->jobacct_oom_kill    = conf->jobacct_oom_kill;
 
 	conf_ptr->get_env_timeout     = conf->get_env_timeout;
 
@@ -808,7 +809,6 @@ static void _fill_ctld_conf(slurm_ctl_conf_t * conf_ptr)
 	conf_ptr->max_tasks_per_node  = conf->max_tasks_per_node;
 	conf_ptr->mcs_plugin          = xstrdup(conf->mcs_plugin);
 	conf_ptr->mcs_plugin_params   = xstrdup(conf->mcs_plugin_params);
-	conf_ptr->mem_limit_enforce   = conf->mem_limit_enforce;
 	conf_ptr->min_job_age         = conf->min_job_age;
 	conf_ptr->mpi_default         = xstrdup(conf->mpi_default);
 	conf_ptr->mpi_params          = xstrdup(conf->mpi_params);

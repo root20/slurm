@@ -56,6 +56,7 @@
 #include "src/common/xcgroup_read_config.h"
 #include "src/common/xmalloc.h"
 #include "src/common/xstring.h"
+#include "src/common/slurm_protocol_api.h"
 
 #define DEFAULT_CGROUP_BASEDIR "/sys/fs/cgroup"
 
@@ -590,4 +591,27 @@ extern void xcgroup_fini_slurm_cgroup_conf(void)
 	}
 
 	slurm_mutex_unlock(&xcgroup_config_read_mutex);
+}
+
+extern bool xcgroup_mem_cgroup_job_confinement(void)
+{
+	slurm_cgroup_conf_t *cg_conf;
+	char *task_plugin_type = NULL;
+	bool status = false;
+
+	/* read cgroup configuration */
+	slurm_mutex_lock(&xcgroup_config_read_mutex);
+	cg_conf = xcgroup_get_slurm_cgroup_conf();
+
+	task_plugin_type = slurm_get_task_plugin();
+
+	if ((cg_conf->constrain_ram_space ||
+	     cg_conf->constrain_swap_space) &&
+	    strstr(task_plugin_type, "cgroup"))
+		status = true;
+
+	slurm_mutex_unlock(&xcgroup_config_read_mutex);
+
+	xfree(task_plugin_type);
+	return status;
 }

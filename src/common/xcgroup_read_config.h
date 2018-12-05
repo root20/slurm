@@ -124,4 +124,7 @@ extern int xcgroup_read_conf(int fd);
  */
 extern void xcgroup_fini_slurm_cgroup_conf(void);
 
+/* Check that memspec cgroup job confinement is configured */
+extern bool xcgroup_mem_cgroup_job_confinement(void);
+
 #endif /* !_CGROUP_READ_CONFIG_H */

@@ -921,7 +921,6 @@ extern void jag_common_poll_data(
 	time_t ct;
 	static int over_memory_kill = -1;
 	int i = 0;
-	char *tok, *save_ptr = NULL;
 
 	xassert(callbacks);
 
@@ -935,24 +934,6 @@ extern void jag_common_poll_data(
 		return;
 	}
 	processing = 1;
-
-	if (over_memory_kill == -1) {
-		char *acct_params = slurm_get_jobacct_gather_params();
-
-		over_memory_kill = 0;
-
-		if (acct_params) {
-			tok = strtok_r(acct_params, ",", &save_ptr);
-			while (tok) {
-				if (xstrcasecmp(tok, "OverMemoryKill") == 0) {
-					over_memory_kill = 1;
-					break;
-				}
-				tok = strtok_r(NULL, ",", &save_ptr);
-			}
-			xfree(acct_params);
-		}
-	}
 
 	if (!callbacks->get_precs)
 		callbacks->get_precs = _get_precs;
@@ -1106,6 +1087,9 @@ extern void jag_common_poll_data(
 		}
 	}
 	list_iterator_destroy(itr);
+
+	if (over_memory_kill == -1)
+		over_memory_kill = slurm_get_jobacct_oom_kill();
 
 	if (over_memory_kill)
 		jobacct_gather_handle_mem_limit(total_job_mem, total_job_vsize);

@@ -3027,7 +3027,7 @@ init_slurm_conf (slurm_ctl_conf_t *ctl_conf_ptr)
 	ctl_conf_ptr->max_step_cnt		= NO_VAL;
 	xfree(ctl_conf_ptr->mcs_plugin);
 	xfree(ctl_conf_ptr->mcs_plugin_params);
-	ctl_conf_ptr->mem_limit_enforce         = false;
+	ctl_conf_ptr->jobacct_oom_kill          = false;
 	ctl_conf_ptr->min_job_age = NO_VAL;
 	xfree (ctl_conf_ptr->mpi_default);
 	xfree (ctl_conf_ptr->mpi_params);
@@ -3496,6 +3496,7 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 	uint64_t def_cpu_per_gpu = 0, def_mem_per_gpu = 0, tot_prio_weight;
 	job_defaults_t *job_defaults;
 	int i;
+	char *tok, *save_ptr = NULL;
 
 	if (!s_p_get_uint16(&conf->batch_start_timeout, "BatchStartTimeout",
 			    hashtbl))
@@ -3734,6 +3735,17 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 
 	(void) s_p_get_string(&conf->job_acct_gather_params,
 			     "JobAcctGatherParams", hashtbl);
+
+	if (conf->job_acct_gather_params) {
+		tok = strtok_r(conf->job_acct_gather_params, ",", &save_ptr);
+		while(tok) {
+			if (xstrcasecmp(tok, "OverMemoryKill") == 0) {
+				conf->jobacct_oom_kill = true;
+				break;
+			}
+			tok = strtok_r(NULL, ",", &save_ptr);
+		}
+	}
 
 	if (!s_p_get_string(&conf->job_ckpt_dir, "JobCheckpointDir", hashtbl))
 		conf->job_ckpt_dir = xstrdup(DEFAULT_JOB_CKPT_DIR);
@@ -4909,16 +4921,6 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 		conf->unkillable_timeout = DEFAULT_UNKILLABLE_TIMEOUT;
 
 	(void) s_p_get_uint16(&conf->vsize_factor, "VSizeFactor", hashtbl);
-
-	/* The default value is true meaning the memory
-	 * is going to be enforced by slurmstepd and/or
-	 * slurmd.
-	 */
-	if (s_p_get_string(&temp_str, "MemLimitEnforce", hashtbl)) {
-		if (xstrncasecmp(temp_str, "yes", 2) == 0)
-			conf->mem_limit_enforce = true;
-		xfree(temp_str);
-	}
 
 	/* The default values for both of these variables are NULL.
 	 */

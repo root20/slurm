@@ -6192,7 +6192,6 @@ _pack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t * build_ptr, Buf buffer,
 		packstr(build_ptr->mcs_plugin, buffer);
 		packstr(build_ptr->mcs_plugin_params, buffer);
 
-		pack16(build_ptr->mem_limit_enforce, buffer);
 		pack32(build_ptr->min_job_age, buffer);
 		packstr(build_ptr->mpi_default, buffer);
 		packstr(build_ptr->mpi_params, buffer);
@@ -6485,7 +6484,7 @@ _pack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t * build_ptr, Buf buffer,
 		packstr(build_ptr->mcs_plugin, buffer);
 		packstr(build_ptr->mcs_plugin_params, buffer);
 
-		pack16(build_ptr->mem_limit_enforce, buffer);
+		pack16(build_ptr->jobacct_oom_kill, buffer);
 		pack32(build_ptr->min_job_age, buffer);
 		packstr(build_ptr->mpi_default, buffer);
 		packstr(build_ptr->mpi_params, buffer);
@@ -6751,7 +6750,8 @@ _pack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t * build_ptr, Buf buffer,
 		packstr(build_ptr->mcs_plugin, buffer);
 		packstr(build_ptr->mcs_plugin_params, buffer);
 
-		pack16(build_ptr->mem_limit_enforce, buffer);
+		pack16(build_ptr->jobacct_oom_kill, buffer);
+
 		pack32(build_ptr->min_job_age, buffer);
 		packstr(build_ptr->mpi_default, buffer);
 		packstr(build_ptr->mpi_params, buffer);
@@ -7077,7 +7077,6 @@ _unpack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t **build_buffer_ptr,
 				       &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mcs_plugin_params,
 				       &uint32_tmp, buffer);
-		safe_unpack16(&build_ptr->mem_limit_enforce, buffer);
 		safe_unpack32(&build_ptr->min_job_age, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mpi_default,
 				       &uint32_tmp, buffer);
@@ -7469,7 +7468,7 @@ _unpack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t **build_buffer_ptr,
 				       &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mcs_plugin_params,
 				       &uint32_tmp, buffer);
-		safe_unpack16(&build_ptr->mem_limit_enforce, buffer);
+		safe_unpack16(&build_ptr->jobacct_oom_kill, buffer);
 		safe_unpack32(&build_ptr->min_job_age, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mpi_default,
 				       &uint32_tmp, buffer);
@@ -7861,7 +7860,7 @@ _unpack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t **build_buffer_ptr,
 				       &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mcs_plugin_params,
 				       &uint32_tmp, buffer);
-		safe_unpack16(&build_ptr->mem_limit_enforce, buffer);
+		safe_unpack16(&build_ptr->jobacct_oom_kill, buffer);
 		safe_unpack32(&build_ptr->min_job_age, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->mpi_default,
 				       &uint32_tmp, buffer);

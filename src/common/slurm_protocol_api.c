@@ -2091,6 +2091,24 @@ char *slurm_get_jobacct_gather_params(void)
 	return jobacct_params;
 }
 
+/* slurm_get_jobacct_oom_kill
+ * returns the job accounting params's OverMemoryKill setting
+ * RET bool *    - jobacct_oom_kill parameter
+ */
+bool slurm_get_jobacct_oom_kill(void)
+{
+        uint16_t enabled = 0;
+	slurm_ctl_conf_t *conf;
+
+	if (slurmdbd_conf) {
+	} else {
+		conf = slurm_conf_lock();
+		enabled = conf->jobacct_oom_kill;
+		slurm_conf_unlock();
+	}
+	return enabled;
+}
+
 /* slurm_get_jobacct_freq
  * returns the job accounting poll frequency from the slurmctld_conf object
  * RET int    - job accounting frequency

@@ -670,6 +670,12 @@ char *slurm_get_jobacct_gather_type(void);
  */
 char *slurm_get_jobacct_gather_params(void);
 
+/* slurm_get_jobacct_oom_kill
+ * returns the job accounting params's OverMemoryKill setting
+ * RET bool *    - jobacct_oom_kill parameter
+ */
+bool slurm_get_jobacct_oom_kill(void);
+
 /* slurm_get_jobacct_gather_freq
  * returns the job accounting poll frequency from the slurmctld_conf object
  * RET int    - job accounting frequency
