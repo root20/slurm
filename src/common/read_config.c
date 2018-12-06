@@ -3739,7 +3739,8 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 		char *save_ptr = NULL;
 		char *tmp = xstrdup(conf->job_acct_gather_params);
 		char *tok = strtok_r(tmp, ",", &save_ptr);
-		while(tok) {
+
+		while (tok) {
 			if (xstrcasecmp(tok, "OverMemoryKill") == 0) {
 				conf->jobacct_oom_kill = true;
 				break;

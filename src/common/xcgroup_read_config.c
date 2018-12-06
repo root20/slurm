@@ -607,7 +607,7 @@ extern bool xcgroup_mem_cgroup_job_confinement(void)
 
 	if ((cg_conf->constrain_ram_space ||
 	     cg_conf->constrain_swap_space) &&
-	    strstr(task_plugin_type, "cgroup"))
+	    xstrstr(task_plugin_type, "cgroup"))
 		status = true;
 
 	slurm_mutex_unlock(&xcgroup_config_read_mutex);
