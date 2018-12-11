@@ -102,7 +102,7 @@ uint16_t slurm_get_batch_start_timeout(void);
 /*
  * slurm_get_control_cnt
  * RET Count of SlurmctldHost records from slurm.conf
- * (slurmctld server count, primary plus backups) 
+ * (slurmctld server count, primary plus backups)
  */
 uint32_t slurm_get_control_cnt(void);
 
@@ -670,11 +670,12 @@ char *slurm_get_jobacct_gather_type(void);
  */
 char *slurm_get_jobacct_gather_params(void);
 
-/* slurm_get_jobacct_oom_kill
- * returns the job accounting params's OverMemoryKill setting
- * RET bool *    - jobacct_oom_kill parameter
+/* slurm_get_job_acct_oom_kill
+ * returns the job_acct_oom_kill setting from the slurmctld_conf object
+ * which represents the value of the OverMemoryKill flag.
+ * RET bool *    - job_acct_oom_kill parameter
  */
-bool slurm_get_jobacct_oom_kill(void);
+bool slurm_get_job_acct_oom_kill(void);
 
 /* slurm_get_jobacct_gather_freq
  * returns the job accounting poll frequency from the slurmctld_conf object

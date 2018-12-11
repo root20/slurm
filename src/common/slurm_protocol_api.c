@@ -2091,11 +2091,12 @@ char *slurm_get_jobacct_gather_params(void)
 	return jobacct_params;
 }
 
-/* slurm_get_jobacct_oom_kill
- * returns the job accounting params's OverMemoryKill setting
- * RET bool *    - jobacct_oom_kill parameter
+/* slurm_get_job_acct_oom_kill
+ * returns the job_acct_oom_kill setting from the slurmctld_conf object
+ * which represents the value of the OverMemoryKill flag.
+ * RET bool *    - job_acct_oom_kill parameter
  */
-bool slurm_get_jobacct_oom_kill(void)
+bool slurm_get_job_acct_oom_kill(void)
 {
         uint16_t enabled = 0;
 	slurm_ctl_conf_t *conf;
@@ -2103,7 +2104,7 @@ bool slurm_get_jobacct_oom_kill(void)
 	if (slurmdbd_conf) {
 	} else {
 		conf = slurm_conf_lock();
-		enabled = conf->jobacct_oom_kill;
+		enabled = conf->job_acct_oom_kill;
 		slurm_conf_unlock();
 	}
 	return enabled;

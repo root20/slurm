@@ -1096,9 +1096,9 @@ int read_slurm_conf(int recover, bool reconfig)
 	}
 
 	cgroup_mem_confinement = xcgroup_mem_cgroup_job_confinement();
-	if (slurmctld_conf.jobacct_oom_kill && cgroup_mem_confinement)
+	if (slurmctld_conf.job_acct_oom_kill && cgroup_mem_confinement)
 		fatal("Jobs memory is being constrained by both TaskPlugin cgroup and JobAcctGather plugin. This enables two incompatible memory enforcement mechanisms, one of them must be disabled.");
-	else if (slurmctld_conf.jobacct_oom_kill)
+	else if (slurmctld_conf.job_acct_oom_kill)
 		info("Memory enforcing by using JobAcctGather's mechanism is discouraged, task/cgroup is recommended where available.");
 	else if (!cgroup_mem_confinement)
 		info("No memory enforcing mechanism configured.");

@@ -766,6 +766,7 @@ static void _fill_ctld_conf(slurm_ctl_conf_t * conf_ptr)
 	conf_ptr->job_acct_gather_freq  = xstrdup(conf->job_acct_gather_freq);
 	conf_ptr->job_acct_gather_type  = xstrdup(conf->job_acct_gather_type);
 	conf_ptr->job_acct_gather_params= xstrdup(conf->job_acct_gather_params);
+	conf_ptr->job_acct_oom_kill    = conf->job_acct_oom_kill;
 
 	conf_ptr->job_ckpt_dir        = xstrdup(conf->job_ckpt_dir);
 	conf_ptr->job_comp_host       = xstrdup(conf->job_comp_host);
@@ -784,7 +785,6 @@ static void _fill_ctld_conf(slurm_ctl_conf_t * conf_ptr)
 	conf_ptr->job_file_append     = conf->job_file_append;
 	conf_ptr->job_requeue         = conf->job_requeue;
 	conf_ptr->job_submit_plugins  = xstrdup(conf->job_submit_plugins);
-	conf_ptr->jobacct_oom_kill    = conf->jobacct_oom_kill;
 
 	conf_ptr->get_env_timeout     = conf->get_env_timeout;
 

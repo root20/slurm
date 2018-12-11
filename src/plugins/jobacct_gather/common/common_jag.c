@@ -1089,10 +1089,11 @@ extern void jag_common_poll_data(
 	list_iterator_destroy(itr);
 
 	if (over_memory_kill == -1)
-		over_memory_kill = slurm_get_jobacct_oom_kill();
+		over_memory_kill = slurm_get_job_acct_oom_kill();
 
 	if (over_memory_kill)
-		jobacct_gather_handle_mem_limit(total_job_mem, total_job_vsize);
+		jobacct_gather_handle_mem_limit(total_job_mem,
+						total_job_vsize);
 
 finished:
 	FREE_NULL_LIST(prec_list);

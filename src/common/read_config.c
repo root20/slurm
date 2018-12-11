@@ -3027,7 +3027,7 @@ init_slurm_conf (slurm_ctl_conf_t *ctl_conf_ptr)
 	ctl_conf_ptr->max_step_cnt		= NO_VAL;
 	xfree(ctl_conf_ptr->mcs_plugin);
 	xfree(ctl_conf_ptr->mcs_plugin_params);
-	ctl_conf_ptr->jobacct_oom_kill          = false;
+	ctl_conf_ptr->job_acct_oom_kill         = false;
 	ctl_conf_ptr->min_job_age = NO_VAL;
 	xfree (ctl_conf_ptr->mpi_default);
 	xfree (ctl_conf_ptr->mpi_params);
@@ -3742,7 +3742,7 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 
 		while (tok) {
 			if (xstrcasecmp(tok, "OverMemoryKill") == 0) {
-				conf->jobacct_oom_kill = true;
+				conf->job_acct_oom_kill = true;
 				break;
 			}
 			tok = strtok_r(NULL, ",", &save_ptr);
