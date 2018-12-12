@@ -377,7 +377,6 @@ static xcc_raw_single_data_t * _read_ipmi_values(void)
 {
 	xcc_raw_single_data_t * xcc_reading;
 	uint8_t buf_rs[IPMI_RAW_MAX_ARGS];
-	int i;
 	int rs_len = 0;
 
 	if (!IPMI_NET_FN_RQ_VALID(cmd_rq[1])) {
@@ -602,7 +601,7 @@ static int _ipmi_send_profile(void)
 
 	/* Create the dataset structure in profile plugin and get the id */
 	if (dataset_id < 0) {
-		acct_gather_profile_dataset_t dataset[5];
+		acct_gather_profile_dataset_t dataset[6];
 		dataset[0].name = xstrdup("Energy");
 		dataset[1].name = xstrdup("MaxPower");
 		dataset[2].name = xstrdup("MinPower");
