@@ -81,6 +81,9 @@ slurmd_conf_t *conf = NULL;
 /*FIXME: Investigate which is the OVERFLOW limit for XCC*/
 #define IPMI_XCC_OVERFLOW INFINITE /* XCC overflows at X */
 
+#define XCC_FLAG_NONE 0x00000000
+#define XCC_FLAG_FAKE 0x00000001
+
 /*
  * These variables are required by the generic plugin interface.  If they
  * are not found in the plugin, the plugin loader will ignore it.
@@ -160,6 +163,7 @@ typedef struct slurm_ipmi_conf {
 	 *   IPMI_MONITORING_DRIVER_TYPE_SUNBMC   = 0x03,
 	 *    Pass < 0 for default of IPMI_MONITORING_DRIVER_TYPE_KCS.*/
 	uint32_t driver_type;
+	uint32_t flags;
 	/* frequency for ipmi call*/
 	uint32_t freq;
 	uint32_t ipmi_flags;
@@ -322,6 +326,7 @@ static void _reset_slurm_ipmi_conf(slurm_ipmi_conf_t *slurm_ipmi_conf)
 		slurm_ipmi_conf->driver_address = 0;
 		xfree(slurm_ipmi_conf->driver_device);
 		slurm_ipmi_conf->driver_type = NO_VAL;
+		slurm_ipmi_conf->flags = XCC_FLAG_NONE;
 		slurm_ipmi_conf->freq = DEFAULT_IPMI_FREQ;
 		slurm_ipmi_conf->ipmi_flags = IPMI_FLAGS_DEFAULT;
 		xfree(slurm_ipmi_conf->password);
@@ -542,11 +547,26 @@ static xcc_raw_single_data_t *_read_ipmi_values(void)
 
 	/* Due to memory alineation we must copy the data from the buffer */
 	xcc_reading = xmalloc(sizeof(xcc_raw_single_data_t));
-	memcpy(&xcc_reading->fifo_inx, buf_rs+2, 2);
-        memcpy(&xcc_reading->j, buf_rs+4, 4);
-        memcpy(&xcc_reading->mj, buf_rs+8, 2);
-        memcpy(&xcc_reading->s, buf_rs+10, 4);
-        memcpy(&xcc_reading->ms, buf_rs+14, 2);
+	if (slurm_ipmi_conf.flags & XCC_FLAG_FAKE) {
+		/* xcc_reading->fifo_inx = 0; */
+		// Fake metric j
+		/* xcc_reading->j = fake_past_read + 550 + rand() % 200; */
+		/* fake_past_read = xcc_reading->j; */
+		/* xcc_reading->mj = 0; */
+		/* xcc_reading->s = time(NULL) - 15; //Fake metric timestamp */
+		/* xcc_reading->ms = 0; */
+		memcpy(&xcc_reading->fifo_inx, buf_rs+2, 2);
+		memcpy(&xcc_reading->j, buf_rs+4, 4);
+		memcpy(&xcc_reading->mj, buf_rs+8, 2);
+		memcpy(&xcc_reading->s, buf_rs+10, 4);
+		memcpy(&xcc_reading->ms, buf_rs+14, 2);
+	} else {
+		memcpy(&xcc_reading->fifo_inx, buf_rs+2, 2);
+		memcpy(&xcc_reading->j, buf_rs+4, 4);
+		memcpy(&xcc_reading->mj, buf_rs+8, 2);
+		memcpy(&xcc_reading->s, buf_rs+10, 4);
+		memcpy(&xcc_reading->ms, buf_rs+14, 2);
+	}
 
 	return xcc_reading;
 }
@@ -1154,6 +1174,7 @@ extern void acct_gather_energy_p_conf_options(s_p_options_t **full_options,
 		{"EnergyIPMITimeout", S_P_UINT32},
 		{"EnergyIPMIUsername", S_P_STRING},
 		{"EnergyIPMIWorkaroundFlags", S_P_UINT32},
+		{"EnergyXCCFake", S_P_BOOLEAN},
 		{NULL} };
 
 	transfer_s_p_options(full_options, options, full_options_cnt);
@@ -1161,6 +1182,8 @@ extern void acct_gather_energy_p_conf_options(s_p_options_t **full_options,
 
 extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 {
+	bool tmp_bool;
+
 	/* Set initial values */
 	_reset_slurm_ipmi_conf(&slurm_ipmi_conf);
 
@@ -1178,6 +1201,8 @@ extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 			       "EnergyIPMIDriverAddress", tbl);
 		s_p_get_string(&slurm_ipmi_conf.driver_device,
 			       "EnergyIPMIDriverDevice", tbl);
+		s_p_get_uint32(&slurm_ipmi_conf.driver_type,
+			       "EnergyIPMIDriverType", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.driver_type,
 			       "EnergyIPMIDriverType", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.freq,
@@ -1202,6 +1227,19 @@ extern void acct_gather_energy_p_conf_set(s_p_hashtbl_t *tbl)
 			       "EnergyIPMIUsername", tbl);
 		s_p_get_uint32(&slurm_ipmi_conf.workaround_flags,
 			       "EnergyIPMIWorkaroundFlags", tbl);
+		s_p_get_boolean(&tmp_bool, "EnergyXCCFake", tbl);
+		if (tmp_bool) {
+			slurm_ipmi_conf.flags |= XCC_FLAG_FAKE;
+			/*
+			 * This is just to do a random query and get error if
+			 * ipmi is not initialized
+			 */
+			cmd_rq[0] = 0x00;
+			cmd_rq[1] = 0x04;
+			cmd_rq[2] = 0x2d;
+			cmd_rq[3] = 0x36;
+			cmd_rq_len = 4;
+		}
 	}
 
 	if (!_run_in_daemon())
