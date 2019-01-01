@@ -87,6 +87,7 @@ struct sprio_parameters {
  ********************/
 extern struct sprio_parameters params;
 extern uint32_t max_age; /* time when not to add any more */
+extern uint32_t weight_admin; /* weight for Admin factor */
 extern uint32_t weight_age; /* weight for age factor */
 extern uint32_t weight_fs; /* weight for Fairshare factor */
 extern uint32_t weight_js; /* weight for Job Size factor */

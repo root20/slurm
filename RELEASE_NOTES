@@ -83,6 +83,7 @@ CONFIGURATION FILE CHANGES (see man appropriate man page for details)
 =====================================================================
  -- Add GPU scheduling options to slurm.conf, available both globally and
     per-partition: DefCpusPerGPU and DefMemPerGPU.
+ -- Add PriorityWeightAdmin to control admin priority factor of a job.
 
 COMMAND CHANGES (see man pages for details)
 ===========================================

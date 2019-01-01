@@ -779,7 +779,7 @@ extern int scontrol_update_job(int argc, char **argv)
 			job_msg.job_id_str = val;
 		}
 		else if (xstrncasecmp(tag, "AdminComment",
-				      MAX(taglen, 3)) == 0) {
+				      MAX(taglen, 6)) == 0) {
 			if (add_info) {
 				if (add_info[0] == '-') {
 					error("Invalid syntax, AdminComment can not be subtracted from.");
@@ -795,6 +795,12 @@ extern int scontrol_update_job(int argc, char **argv)
 				add_info = NULL;
 			} else
 				job_msg.admin_comment = val;
+			update_cnt++;
+		}
+		else if (xstrncasecmp(tag, "AdminPrioFactor",
+				      MAX(taglen, 6)) == 0) {
+			int priority = strtoll(val, (char **)NULL, 10);
+			job_msg.admin_prio_factor = priority;
 			update_cnt++;
 		}
 		else if (xstrncasecmp(tag, "ArrayTaskThrottle",

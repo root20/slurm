@@ -1954,6 +1954,14 @@ Job Priority
 Job Id
 .RE
 
+.TP
+\fBPriorityWeightAdmin\fR
+An integer value that sets the degree to which a job's admin priority factor
+component contributes to the job's priority. A job's admin priority factor can
+be set either with \fIscontrol\fR or by a job submit plugin. Note that The
+admin priority factor is not a normalized value.
+Applicable only if PriorityType=priority/multifactor.
+The default value is 0.
 
 .TP
 \fBPriorityWeightAge\fR

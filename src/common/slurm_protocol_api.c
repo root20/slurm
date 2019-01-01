@@ -888,6 +888,25 @@ uint32_t slurm_get_priority_weight_qos(void)
 	return factor;
 }
 
+/* slurm_get_priority_weight_admin
+ * returns the priority weight for admin from slurmctld_conf object
+ * RET uint32_t - factor weight.
+ */
+uint32_t slurm_get_priority_weight_admin(void)
+{
+	uint32_t factor = NO_VAL;
+	slurm_ctl_conf_t *conf;
+
+	if (slurmdbd_conf) {
+	} else {
+		conf = slurm_conf_lock();
+		factor = conf->priority_weight_admin;
+		slurm_conf_unlock();
+	}
+
+	return factor;
+}
+
 /* slurm_get_priority_weight_tres
  * returns the priority weights for TRES' from slurmctld_conf object
  * RET char * string of configured tres weights. MUST be xfreed by caller

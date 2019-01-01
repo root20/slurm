@@ -306,6 +306,7 @@ s_p_options_t slurm_conf_options[] = {
 	{"PriorityUsageResetPeriod", S_P_STRING},
 	{"PriorityType", S_P_STRING},
 	{"PriorityFlags", S_P_STRING},
+	{"PriorityWeightAdmin", S_P_UINT32},
 	{"PriorityWeightAge", S_P_UINT32},
 	{"PriorityWeightFairshare", S_P_UINT32},
 	{"PriorityWeightJobSize", S_P_UINT32},
@@ -4354,6 +4355,9 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 	if (!s_p_get_string(&conf->priority_type, "PriorityType", hashtbl))
 		conf->priority_type = xstrdup(DEFAULT_PRIORITY_TYPE);
 
+	if (!s_p_get_uint32(&conf->priority_weight_admin,
+			    "PriorityWeightAdmin", hashtbl))
+		conf->priority_weight_admin = 0;
 	if (!s_p_get_uint32(&conf->priority_weight_age,
 			    "PriorityWeightAge", hashtbl))
 		conf->priority_weight_age = 0;
@@ -4376,6 +4380,7 @@ _validate_and_set_defaults(slurm_ctl_conf_t *conf, s_p_hashtbl_t *hashtbl)
 	/* Check for possible overflow of priority.
 	 * We also check when doing the computation for each job. */
 	tot_prio_weight = (uint64_t) conf->priority_weight_age   +
+		(uint64_t) conf->priority_weight_admin +
 		(uint64_t) conf->priority_weight_fs   +
 		(uint64_t) conf->priority_weight_js   +
 		(uint64_t) conf->priority_weight_part +

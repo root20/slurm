@@ -372,6 +372,12 @@ uint32_t slurm_get_priority_weight_partition(void);
  */
 uint32_t slurm_get_priority_weight_qos(void);
 
+/* slurm_get_priority_weight_admin
+ * returns the priority weight for admin from slurmctld_conf object
+ * RET uint32_t - factor weight.
+ */
+uint32_t slurm_get_priority_weight_admin(void);
+
 /* slurm_get_priority_weight_tres
  * returns the priority weights for TRES' from slurmctld_conf object
  * RET char * of the tres weights.

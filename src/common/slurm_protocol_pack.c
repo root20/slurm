@@ -2755,6 +2755,7 @@ static void _pack_priority_factors_object(void *in, Buf buffer,
 		pack32(object->job_id, buffer);
 		pack32(object->user_id, buffer);
 
+		packdouble(object->priority_admin, buffer);
 		packdouble(object->priority_age, buffer);
 		packdouble(object->priority_fs, buffer);
 		packdouble(object->priority_js, buffer);
@@ -2823,6 +2824,7 @@ static int _unpack_priority_factors_object(void **object, Buf buffer,
 		safe_unpack32(&object_ptr->job_id, buffer);
 		safe_unpack32(&object_ptr->user_id, buffer);
 
+		safe_unpackdouble(&object_ptr->priority_admin, buffer);
 		safe_unpackdouble(&object_ptr->priority_age, buffer);
 		safe_unpackdouble(&object_ptr->priority_fs, buffer);
 		safe_unpackdouble(&object_ptr->priority_js, buffer);
@@ -5783,6 +5785,7 @@ _unpack_job_info_members(job_info_t * job, Buf buffer,
 		safe_unpackstr_xmalloc(&job->partition, &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&job->account, &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&job->admin_comment, &uint32_tmp,buffer);
+		safe_unpack32(&job->admin_prio_factor, buffer);
 		safe_unpackstr_xmalloc(&job->network, &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&job->comment, &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&job->batch_features, &uint32_tmp,
@@ -6459,6 +6462,7 @@ _pack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t * build_ptr, Buf buffer,
 		packstr(build_ptr->priority_params, buffer);
 		pack16(build_ptr->priority_reset_period, buffer);
 		packstr(build_ptr->priority_type, buffer);
+		pack32(build_ptr->priority_weight_admin, buffer);
 		pack32(build_ptr->priority_weight_age, buffer);
 		pack32(build_ptr->priority_weight_fs, buffer);
 		pack32(build_ptr->priority_weight_js, buffer);
@@ -7360,6 +7364,7 @@ _unpack_slurm_ctl_conf_msg(slurm_ctl_conf_info_msg_t **build_buffer_ptr,
 		safe_unpack16(&build_ptr->priority_reset_period, buffer);
 		safe_unpackstr_xmalloc(&build_ptr->priority_type, &uint32_tmp,
 				       buffer);
+		safe_unpack32(&build_ptr->priority_weight_admin, buffer);
 		safe_unpack32(&build_ptr->priority_weight_age, buffer);
 		safe_unpack32(&build_ptr->priority_weight_fs, buffer);
 		safe_unpack32(&build_ptr->priority_weight_js, buffer);
@@ -8412,6 +8417,7 @@ _pack_job_desc_msg(job_desc_msg_t * job_desc_ptr, Buf buffer,
 
 	/* load the data values */
 	if (protocol_version >= SLURM_19_05_PROTOCOL_VERSION) {
+		pack32(job_desc_ptr->admin_prio_factor, buffer);
 		packstr(job_desc_ptr->batch_features, buffer);
 		packstr(job_desc_ptr->cluster_features, buffer);
 		packstr(job_desc_ptr->clusters, buffer);
@@ -8847,6 +8853,7 @@ _unpack_job_desc_msg(job_desc_msg_t ** job_desc_buffer_ptr, Buf buffer,
 		*job_desc_buffer_ptr = job_desc_ptr;
 
 		/* load the data values */
+		safe_unpack32(&job_desc_ptr->admin_prio_factor, buffer);
 		safe_unpackstr_xmalloc(&job_desc_ptr->batch_features,
 				       &uint32_tmp, buffer);
 		safe_unpackstr_xmalloc(&job_desc_ptr->cluster_features,

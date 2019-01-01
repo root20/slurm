@@ -837,6 +837,7 @@ static void _fill_ctld_conf(slurm_ctl_conf_t * conf_ptr)
 	conf_ptr->priority_params     = xstrdup(conf->priority_params);
 	conf_ptr->priority_reset_period = conf->priority_reset_period;
 	conf_ptr->priority_type       = xstrdup(conf->priority_type);
+	conf_ptr->priority_weight_admin = conf->priority_weight_admin;
 	conf_ptr->priority_weight_age = conf->priority_weight_age;
 	conf_ptr->priority_weight_fs  = conf->priority_weight_fs;
 	conf_ptr->priority_weight_js  = conf->priority_weight_js;
